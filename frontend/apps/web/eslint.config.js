@@ -14,5 +14,5 @@ export default tseslint.config(
       'no-restricted-globals': ['error', { name: 'fetch', message: '通过 feature/api 与共享接口包调用 API。' }],
     },
   },
-  { files: ['src/features/**/api/index.ts'], rules: { 'no-restricted-imports': 'off' } },
+  { files: ['src/features/**/api/index.ts'], rules: { 'no-restricted-imports': 'off', 'no-restricted-globals': 'off' } },
 )

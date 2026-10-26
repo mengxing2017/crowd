@@ -1,1 +1,3 @@
-export function App() { return <main><h1>Crowd</h1><p>项目已就绪。</p></main> }
+import { Console } from '../features/community/Console'
+import { Landing } from '../features/community/Landing'
+export function App() { const code = new URLSearchParams(window.location.search).get('source'); return code ? <Landing code={code} /> : <Console /> }
