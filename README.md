@@ -6,7 +6,7 @@ Crowd 是面向产品推广与任务佣金管理的平台。目标流程为：�
 
 ## 需求与范围
 
-以下为目标业务范围，当前尚未完成业务实现与验收。人工线下结算及无真实资金池的边界已确认；具体阈值、期限、复核策略和上线排期仍以业务确认结果为准。
+以下为目标业务范围，M01–M04 已开展实现，其余领域尚未完成业务实现；全业务尚未验收。人工线下结算及无真实资金池的边界已确认；具体阈值、期限、复核策略和上线排期仍以业务确认结果为准。
 
 | 业务领域 | 目标能力 |
 | --- | --- |
@@ -44,44 +44,61 @@ Crowd 是面向产品推广与任务佣金管理的平台。目标流程为：�
 ## 当前工程状态
 
 ```text
-backend/                API；system 模块展示领域、用例、HTTP、端口和 PostgreSQL 适配分层
-  migrations/           仅工程元数据，启动自动迁移
-frontend/apps/web/      React / TypeScript / Vite 空白首页
-frontend/apps/miniapp/  uni-app / Vue 3 / TypeScript 空白首页
-api-contract/           平台中立的系统接口类型与注入式请求 client
-docs/adr/               工程决策
+backend/                system 与 community；业务领域、用例、HTTP、端口和 PostgreSQL/微信适配
+  migrations/           工程元数据、身份、会话、资料、推广和规则，启动自动迁移
+frontend/apps/web/      React 管理端：一次性票据登录、规则中心、岗位操作、审计及推广落地页
+frontend/apps/miniapp/  uni-app 用户端：微信登录、资料、私有收款图片、推广码、纠错/注销申请
+api-contract/           平台中立类型、注入式 client、运行时响应校验及跨语言序列化样本
+docs/requirements/     M01–M04 四十条需求与实现、依赖的追踪表
 ```
 
-当前仅实现工程骨架，注册登录、推广、任务、佣金数字、收款资料、提现申请及人工结算后台均未实现。现有系统端点为 `/healthz`、`/readyz`、`/api/v1/system`；就绪检查查询数据库元数据，失败返回 503。未知路由返回 404。迁移失败会阻止启动。
+已实现 M01–M04 的规则版本/动作权限及数据范围、可信微信身份交换与会话、资料版本/用途隔离、私有图片、个人与定向推广码及操作审计。手机号绑定尚未启用，支付宝支持形式未确认时只保存草稿。身份合并、注销及收款纠错登记待核查申请，不自动执行跨模块清理。任务执行、佣金数字、提现及人工结算服务仍未实现，不能宣称四十条需求全部业务验收通过。
+
+系统既有端点 `/healthz`、`/readyz`、`/api/v1/system` 保持兼容；新增 `/api/v1/community/*`。就绪检查仍查询数据库元数据，失败 503，迁移失败阻止启动。部署与接口参数见 [M01–M04 运行记录](docs/runbooks/m01-m04.md)，逐条范围见 [需求追踪表](docs/requirements/m01-m04.md)。
 
 ## 开发
 
 工具版本：Rust 1.97.1、Node 22、pnpm 11.22.0，使用 `devbox shell` 进入环境。
 
+本地开发默认使用与 `../wekeeper` 相同的嵌入式 PostgreSQL 17，无需 Docker 或手动建库：
+
 ```bash
 make install
-cp env.example .env
-# 填写 POSTGRES_PASSWORD，建议使用 openssl rand -hex 24 的结果。
-docker compose --env-file .env -f compose.yaml -f compose.dev.yaml up -d postgres
-# 显式注入与 .env 对应的数据库密码；本地后端不会自动读取 .env。
-export CROWD_DATABASE_URL='postgres://crowd:替换密码@127.0.0.1:5432/crowd'
-make api-dev
+devbox run -- make api-dev
 # 另一个终端
-make web-dev
+devbox run -- make web-dev
 ```
 
-Web 访问 http://127.0.0.1:5173；API 默认监听 127.0.0.1:8080。`CROWD_BIND_ADDR` 可修改监听地址，`CROWD_API_ORIGIN` 可修改 Vite 代理上游，`RUST_LOG` 控制日志。数据库 URL 中的特殊字符需百分号编码；远程数据库按环境配置 TLS。
+`make api-dev` 等同 `make dev-embedded`，也可运行 `devbox run dev-embedded`。入口自动下载/复用 PostgreSQL 17 二进制、选择随机数据库端口与密码、创建临时 `crowd_dev` 库，执行与正式服务相同的 migration 和推广码 worker，然后启动 API。**正常退出删除临时数据，每次重启重新建库**；安装缓存保留在 `~/.theseus/postgresql`。SIGKILL、系统崩溃等异常中断不保证完成清理。
 
-小程序运行 `make miniapp-dev`，在微信开发者工具导入 `frontend/apps/miniapp/dist/dev/mp-weixin`；发布构建为 `pnpm --dir frontend --filter @crowd/miniapp build`，产物在 `dist/build/mp-weixin`。先在 manifest.json 填写自己的微信 AppID。当前首页不访问接口，不需要凭据或请求域名。
+嵌入式入口忽略 `CROWD_DATABASE_URL` 和外部测试库 URL，不自动读取 `.env`，不会连接已有应用数据库。微信与其他业务配置仍由同一终端 export；不提供绕过微信身份校验的本地用户。首个管理员及协议仍按 [M01–M04 运行记录](docs/runbooks/m01-m04.md) 配置，临时库重启后需重新初始化。
+
+Web 访问 http://127.0.0.1:5173；API 默认监听 127.0.0.1:8080。`CROWD_BIND_ADDR` 可修改 API 端口，嵌入式入口只接受环回地址。`CROWD_API_ORIGIN` 可修改 Vite 代理上游，`RUST_LOG` 控制日志。详见 [嵌入式开发与验证](docs/runbooks/embedded-postgres.md)。
+
+需要持久化开发数据或使用外部 PostgreSQL 时显式选择：
+
+```bash
+cp env.example .env
+# 填写 POSTGRES_PASSWORD，例如使用 openssl rand -hex 24 的结果。
+docker compose --env-file .env -f compose.yaml -f compose.dev.yaml up -d postgres
+export CROWD_DATABASE_URL='postgres://crowd:替换密码@127.0.0.1:5432/crowd'
+devbox run -- make api-external
+```
+
+`api-external` 与生产二进制要求显式数据库 URL；URL 特殊字符须百分号编码，远程数据库按环境配置 TLS。Compose 仍部署独立 PostgreSQL，嵌入式库仅为 Cargo dev-dependency。
+
+小程序运行 `make miniapp-dev`，在微信开发者工具导入 `frontend/apps/miniapp/dist/dev/mp-weixin`；发布构建为 `pnpm --dir frontend --filter @crowd/miniapp build`，产物在 `dist/build/mp-weixin`。先在 manifest.json 填写自己的微信 AppID。当前个人中心访问 API；构建时设置 `VITE_API_ORIGIN`，生产配置微信合法 HTTPS 请求/下载域名。微信 AppSecret 仅配置在服务端。初始化管理员、发布协议及二维码域名配置见 M01–M04 运行记录。
 
 ## 检查
 
 ```bash
 make check-web
 devbox run -- make check-backend
+devbox run -- make test-embedded
+devbox run -- make test-business
 ```
 
-前端检查包含契约类型、两端类型检查、lint 和生产构建；后端包含格式、编译、Clippy 和不连接数据库的 HTTP 契约测试。
+前端检查包含契约类型、两端类型检查、lint 和生产构建；后端包含格式、编译、Clippy、领域与 HTTP 契约测试。`test-embedded` 验证实际嵌入式入口的迁移、信号退出、端口冲突清理与配置隔离（需 Python 3）；`test-business` 自动创建独立嵌入式测试库，执行此前需手动准备数据库的集成测试并清理。普通后端测试默认跳过数据库测试，跳过不代表通过。
 
 ## Docker
 
@@ -89,4 +106,4 @@ devbox run -- make check-backend
 
 生产设置 `API_IMAGE`、`WEB_IMAGE` 为发布镜像，使用 `docker compose --env-file .env -f compose.yaml up -d --wait`。源码构建上下文必须为仓库根目录。Web 镜像只构建 Web 和 contract，小程序独立发布。公网部署需自行配置 HTTPS 入口。
 
-本地检查结果及未执行的环境验证见 [骨架验证记录](docs/runbooks/foundation-validation.md)。
+原骨架检查保留在 [骨架验证记录](docs/runbooks/foundation-validation.md)；新增业务检查及未验证项见 [M01–M04 运行记录](docs/runbooks/m01-m04.md)。
