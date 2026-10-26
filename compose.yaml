@@ -16,6 +16,11 @@ services:
     image: ${API_IMAGE:-crowd-api:local}
     environment:
       CROWD_BIND_ADDR: 0.0.0.0:8080
+      CROWD_WECHAT_APP_ID: ${CROWD_WECHAT_APP_ID:-}
+      CROWD_WECHAT_APP_SECRET: ${CROWD_WECHAT_APP_SECRET:-}
+      CROWD_BOOTSTRAP_PLATFORM_ID: ${CROWD_BOOTSTRAP_PLATFORM_ID:-}
+      CROWD_SESSION_SECONDS: ${CROWD_SESSION_SECONDS:-7200}
+      CROWD_PROMOTION_ORIGIN: ${CROWD_PROMOTION_ORIGIN:-}
       CROWD_DATABASE_URL: postgres://crowd:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/crowd
     depends_on:
       postgres: {condition: service_healthy}
