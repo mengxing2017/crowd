@@ -24,12 +24,13 @@ export function createCommunity(transport: Transport) {
     if (!raw || !('data' in raw) || typeof raw.request_id !== 'string') throw new Error('服务响应不符合契约，请查询原结果后重试')
     const value = raw.data
     if (request.path === '/api/v1/community/read/me') guardUser(value)
-    if (request.path === '/api/v1/community/login' || request.path === '/api/v1/community/session') guardLogin(value)
+    if (request.path === '/api/v1/community/admin/login' || request.path === '/api/v1/community/login' || request.path === '/api/v1/community/session') guardLogin(value)
     return value as T
   }
   return {
     agreements: () => call<Rule>({ method: 'GET', path: '/api/v1/community/agreements' }),
     login: (body: { code: string; agreed: boolean; agreement_id?: string; source?: string }) => call<Login>({ method: 'POST', path: '/api/v1/community/login', body }),
+    adminLogin: (body: { username: string; password: string }) => call<Login>({ method: 'POST', path: '/api/v1/community/admin/login', body }),
     redeem: (ticket: string) => call<Login>({ method: 'POST', path: '/api/v1/community/session', body: { ticket } }),
     read: <T>(section: string, target?: string) => call<T>({ method: 'GET', path: `/api/v1/community/read/${encodeURIComponent(section)}${target ? `?target=${encodeURIComponent(target)}` : ''}` }),
     command: <T = Record<string, unknown>>(action: string, body: Record<string, unknown>, key: string) => call<T>({ method: 'POST', path: `/api/v1/community/commands/${encodeURIComponent(action)}`, body, key }),

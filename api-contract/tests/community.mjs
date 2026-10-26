@@ -20,3 +20,11 @@ for (const bad of [null, {}, { data: {} }, { data: {}, request_id: 'bad-user' }]
 await assert.rejects(createCommunity(async () => ({ data: { token: 'forged', user_id: 'x', expires_in: 10 }, request_id: 'bad-login' })).redeem('ticket'))
 await assert.rejects(createCommunity(async () => ({ error: { code: 'FORBIDDEN', message: '无权访问', request_id: 'trace' } })).read('audit'), e => e instanceof BusinessError && e.detail.request_id === 'trace')
 console.log('Community contract: Rust fixture, envelope guards, request encoding, idempotency and error handling passed')
+
+const session = { token: 'a'.repeat(48), user_id: 'staff', expires_in: 7200 }
+const staffApi = createCommunity(async r => { request = r; return { data: session, request_id: 'admin-login' } })
+assert.deepEqual(await staffApi.adminLogin({ username: 'admin', password: 'test-password' }), session)
+assert.equal(request.path, '/api/v1/community/admin/login')
+assert.equal(request.method, 'POST')
+assert.deepEqual(request.body, { username: 'admin', password: 'test-password' })
+await assert.rejects(createCommunity(async () => ({ data: {}, request_id: 'bad-staff' })).adminLogin({ username: 'admin', password: 'wrong' }))
