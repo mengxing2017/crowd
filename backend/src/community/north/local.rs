@@ -8,6 +8,12 @@ pub struct Service {
     pub repo: Repository,
 }
 impl Service {
+    pub async fn staff_login(&self, input: &Value, request: &str) -> Result<Value> {
+        let username = crate::community::domain::text(input, "username")?;
+        let password = crate::community::domain::text(input, "password")?;
+        self.repo.staff_login(username, password, request).await
+    }
+
     pub async fn login(
         &self,
         provider: &impl IdentityProvider,

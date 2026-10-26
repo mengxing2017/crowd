@@ -301,5 +301,91 @@ async fn postgres_registration_sessions_files_and_concurrent_commands() {
             .await
             .is_err()
     );
+    // Password-based staff identities do not create fake WeChat registrations.
+    let secret = "admin-test-secret-2026";
+    assert!(service.repo.bootstrap_staff("admin", secret).await.unwrap());
+    assert!(
+        !service
+            .repo
+            .bootstrap_staff("admin", "different-password")
+            .await
+            .unwrap()
+    );
+    let hash: String =
+        sqlx::query_scalar("SELECT password_hash FROM crowd_staff_accounts WHERE username='admin'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(hash.starts_with("$argon2id$"));
+    assert!(!hash.contains(secret));
+    for username in ["admin", "missing"] {
+        assert_eq!(
+            service
+                .staff_login(
+                    &json!({"username":username,"password":"wrong"}),
+                    "bad-login"
+                )
+                .await
+                .unwrap_err()
+                .0,
+            "AUTH_INVALID"
+        );
+    }
+    let staff = service
+        .staff_login(
+            &json!({"username":"admin","password":secret}),
+            "staff-login",
+        )
+        .await
+        .unwrap();
+    let token = staff["token"].as_str().unwrap();
+    let staff_id = staff["user_id"].as_str().unwrap();
+    assert!(
+        service
+            .read(token, "rules", None, "staff-rules")
+            .await
+            .is_ok()
+    );
+    service
+        .command(token, "logout", &json!({}), "staff-logout", "staff-logout")
+        .await
+        .unwrap();
+    assert!(service.read(token, "me", None, "staff-out").await.is_err());
+    for _ in 0..5 {
+        assert!(
+            service
+                .staff_login(&json!({"username":"admin","password":"wrong"}), "attempt")
+                .await
+                .is_err()
+        );
+    }
+    assert!(
+        service
+            .staff_login(&json!({"username":"admin","password":secret}), "blocked")
+            .await
+            .is_err()
+    );
+    sqlx::query("UPDATE crowd_staff_accounts SET blocked_until=now()-interval '1 second'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        service
+            .staff_login(&json!({"username":"admin","password":secret}), "unblocked")
+            .await
+            .is_ok()
+    );
+    let mut tx = service.repo.begin().await.unwrap();
+    let mut state = Repository::load(&mut tx).await.unwrap();
+    state.users.get_mut(staff_id).unwrap().status = "disabled".into();
+    Repository::save(&mut tx, &state).await.unwrap();
+    Repository::commit(tx).await.unwrap();
+    assert!(
+        service
+            .staff_login(&json!({"username":"admin","password":secret}), "disabled")
+            .await
+            .is_err()
+    );
+    assert!(!serde_json::to_string(&state).unwrap().contains(secret));
     pool.close().await;
 }

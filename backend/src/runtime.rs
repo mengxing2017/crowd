@@ -11,7 +11,44 @@ pub fn bind_address() -> Result<SocketAddr, std::net::AddrParseError> {
 
 /// The caller owns the pool and must close it on both success and startup failure.
 pub async fn serve(pool: PgPool, address: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
+    serve_inner(pool, address, true).await
+}
+
+/// Local runner has its own temporary credentials and ignores production bootstrap secrets.
+pub async fn serve_embedded(
+    pool: PgPool,
+    address: SocketAddr,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !address.ip().is_loopback() {
+        return Err("embedded API must bind to loopback".into());
+    }
+    serve_inner(pool, address, false).await
+}
+
+async fn serve_inner(
+    pool: PgPool,
+    address: SocketAddr,
+    configured_bootstrap: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     sqlx::migrate!("./migrations").run(&pool).await?;
+    if configured_bootstrap {
+        let username = std::env::var("CROWD_BOOTSTRAP_ADMIN_USERNAME")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let password = std::env::var("CROWD_BOOTSTRAP_ADMIN_PASSWORD")
+            .ok()
+            .filter(|v| !v.is_empty());
+        match (username, password) {
+            (Some(username), Some(password)) => {
+                crate::community::south::adapter::postgres::Repository { pool: pool.clone() }
+                    .bootstrap_staff(&username, &password)
+                    .await
+                    .map_err(|_| "administrator bootstrap failed; check configuration")?;
+            }
+            (None, None) => {}
+            _ => return Err("administrator bootstrap requires both username and password".into()),
+        }
+    }
     let listener = tokio::net::TcpListener::bind(address).await?;
     let code_jobs = crate::community::south::adapter::postgres::Repository { pool: pool.clone() };
     let worker = tokio::spawn(async move {

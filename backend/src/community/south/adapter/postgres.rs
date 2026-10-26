@@ -6,7 +6,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 pub struct Repository {
     pub pool: PgPool,
 }
-fn database(_: sqlx::Error) -> Failure {
+pub(super) fn database(_: sqlx::Error) -> Failure {
     Failure(
         "SERVICE_UNAVAILABLE",
         "服务暂不可用，请凭追踪编号查询后重试",

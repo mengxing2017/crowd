@@ -40,7 +40,7 @@ fn response(result: Result<Value, Failure>, request: &str) -> Response {
         Ok(v) => (StatusCode::OK, json!({"data":v,"request_id":request})),
         Err(Failure(code, message)) => {
             let status = match code {
-                "SESSION_EXPIRED" => StatusCode::UNAUTHORIZED,
+                "SESSION_EXPIRED" | "AUTH_INVALID" => StatusCode::UNAUTHORIZED,
                 "FORBIDDEN" => StatusCode::FORBIDDEN,
                 "NOT_FOUND" => StatusCode::NOT_FOUND,
                 "VERSION_CONFLICT" | "IDEMPOTENCY_CONFLICT" => StatusCode::CONFLICT,
@@ -74,6 +74,7 @@ pub fn routes() -> Router<Application> {
     Router::new()
         .route("/api/v1/community/agreements", get(agreements))
         .route("/api/v1/community/login", post(login))
+        .route("/api/v1/community/admin/login", post(staff_login))
         .route("/api/v1/community/session", post(redeem))
         .route("/api/v1/community/resolve/{code}", get(resolve))
         .route("/api/v1/community/read/{section}", get(read))
@@ -259,6 +260,18 @@ async fn redeem(
             Ok(ticket) => app.community.repo.redeem(ticket).await,
             Err(e) => Err(e),
         },
+        Err(e) => Err(e),
+    };
+    response(result, &r)
+}
+
+async fn staff_login(
+    State(app): State<Application>,
+    body: Result<Json<Value>, JsonRejection>,
+) -> Response {
+    let r = request_id();
+    let result = match parse(body) {
+        Ok(input) => app.community.staff_login(&input, &r).await,
         Err(e) => Err(e),
     };
     response(result, &r)
