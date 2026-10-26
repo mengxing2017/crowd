@@ -1,1 +1,17 @@
 body { margin: 0; font-family: system-ui, sans-serif; color: #172f35; background: #f3f7f6; } main { max-width: 1000px; margin: auto; padding: 32px 24px; } section, article { background: white; border: 1px solid #cfddd9; border-radius: 12px; padding: 20px; margin: 20px 0; } label { display: block; margin: 12px 0; } input, textarea, select { display: block; box-sizing: border-box; width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #8da6a0; border-radius: 5px; font: inherit; } button { padding: 10px 18px; margin: 6px 8px 6px 0; background: #176955; color: white; border: 0; border-radius: 5px; cursor: pointer; } button:disabled { opacity: .45; cursor: default; } pre { white-space: pre-wrap; overflow-wrap: anywhere; } [role=status] { overflow-wrap: anywhere; }
+
+.admin-login { max-width: 1080px; min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; box-sizing: border-box; }
+.login-intro h1 { font-size: clamp(32px, 4vw, 48px); line-height: 1.3; letter-spacing: -1px; margin: 30px 0 20px; }
+.login-intro p { line-height: 1.9; color: #526b65; }
+.login-brand { font-weight: 800; letter-spacing: 5px; color: #176955; }
+.login-intro small { display: block; margin-top: 48px; line-height: 1.8; }
+.login-panel { padding: 36px; box-shadow: 0 16px 48px #173d3010; }
+.login-panel h2 { margin-top: 0; font-size: 26px; }
+.login-panel p, .login-panel small { color: #526b65; line-height: 1.6; }
+.login-panel fieldset { padding: 0; border: 0; min-width: 0; }
+.login-panel input { padding: 12px; }
+.login-panel input:focus-visible { outline: 2px solid #176955; outline-offset: 2px; }
+.login-submit { width: 100%; margin: 18px 0 4px; padding: 13px; }
+.login-switch { background: transparent; color: #176955; width: 100%; margin: 4px 0 20px; }
+.login-panel .login-error { color: #9b2828; overflow-wrap: anywhere; }
+@media (max-width: 720px) { .admin-login { grid-template-columns: 1fr; gap: 12px; padding: 28px 20px; } .login-intro h1 { font-size: 32px; margin: 18px 0; } .login-intro small { margin-top: 16px; } .login-panel { padding: 24px; margin: 8px 0; } }
