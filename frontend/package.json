@@ -1,0 +1,10 @@
+{
+  "name": "crowd-frontend",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "pnpm --filter @crowd/web dev",
+    "build": "pnpm --filter @crowd/web build",
+    "check": "pnpm -r typecheck && pnpm -r lint && pnpm -r build"
+  }
+}

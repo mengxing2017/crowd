@@ -1,0 +1,16 @@
+.devbox/
+node_modules/
+target/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# Local planning documents
+report/
