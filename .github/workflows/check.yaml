@@ -9,6 +9,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - run: make check-backend
+      - run: make test-embedded
+      - run: make test-business
   frontend:
     runs-on: ubuntu-latest
     steps:

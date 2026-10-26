@@ -25,7 +25,10 @@
       "api": "make api-dev",
       "web": "make web-dev",
       "fmt": "cargo fmt --manifest-path backend/Cargo.toml --all",
-      "fmt:check": "cargo fmt --manifest-path backend/Cargo.toml --all --check"
+      "fmt:check": "cargo fmt --manifest-path backend/Cargo.toml --all --check",
+      "dev-embedded": "make dev-embedded",
+      "test-embedded": "make test-embedded",
+      "test-business": "make test-business"
     }
   }
 }
