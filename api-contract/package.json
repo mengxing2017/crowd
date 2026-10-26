@@ -5,10 +5,12 @@
   "type": "module",
   "packageManager": "pnpm@11.22.0",
   "exports": {
-    "./system": "./src/modules/system/index.ts"
+    "./system": "./src/modules/system/index.ts",
+    "./community": "./src/modules/community/index.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "node tests/community.mjs"
   },
   "devDependencies": {
     "typescript": "~5.8.3"
