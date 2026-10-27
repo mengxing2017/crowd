@@ -13,7 +13,9 @@ const AuditLog = lazy(() => import('./pages/AuditLog').then(module => ({ default
 const Guide = lazy(() => import('./pages/Guide').then(module => ({ default: module.Guide })))
 const Catalog = lazy(() => import('./pages/Catalog').then(module => ({ default: module.Catalog })))
 const Attribution = lazy(() => import('./pages/Attribution').then(module => ({ default: module.Attribution })))
-const icons = { catalog: <BookOutlined />, attribution: <QrcodeOutlined />, welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
+const TaskRules = lazy(() => import('./pages/TaskRules').then(module => ({ default: module.TaskRules })))
+const Tasks = lazy(() => import('./pages/Tasks').then(module => ({ default: module.Tasks })))
+const icons = { taskRules: <FileProtectOutlined />, tasks: <SafetyCertificateOutlined />, catalog: <BookOutlined />, attribution: <QrcodeOutlined />, welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
 interface Pending { action: string; body: Record<string, unknown>; key: string; owner: string }
 function currentSection(): Section { return sections.find(section => `#/${section.key}` === window.location.hash)?.key || 'welcome' }
 async function readStaffSession() {
@@ -101,6 +103,8 @@ export function Console() {
           {active.key === 'audit' && <AuditLog busy={busy} run={run} />}
           {active.key === 'catalog' && <Catalog me={me} busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'attribution' && <Attribution me={me} busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'taskRules' && <TaskRules me={me} busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'tasks' && <Tasks me={me} busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'guide' && <Guide />}
         </Suspense></Spin>
       </Space>
