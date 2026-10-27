@@ -28,3 +28,20 @@ assert.equal(request.path, '/api/v1/community/admin/login')
 assert.equal(request.method, 'POST')
 assert.deepEqual(request.body, { username: 'admin', password: 'test-password' })
 await assert.rejects(createCommunity(async () => ({ data: {}, request_id: 'bad-staff' })).adminLogin({ username: 'admin', password: 'wrong' }))
+
+const catalog = { categories: [], products: [], revision: 1 }
+const catalogApi = createCommunity(async r => { request = r; return { data: catalog, request_id: 'catalog' } })
+assert.deepEqual(await catalogApi.catalog({ keyword: '产品 & A', min_cents: 100, task_status: 'available' }), catalog)
+assert.equal(request.path, '/api/v1/catalog?keyword=%E4%BA%A7%E5%93%81%20%26%20A&min_cents=100&task_status=available')
+await catalogApi.touch({ code: 'code', scene: 'miniapp' }, 'visit-key')
+assert.equal(request.path, '/api/v1/catalog/touches')
+assert.equal(request.key, 'visit-key')
+for (const bad of [{}, { products: [], categories: [], revision: 1.5 }, { categories: [], products: [{ id: 'p', content: {} }], revision: 1 }]) {
+  await assert.rejects(createCommunity(async () => ({ data: bad, request_id: 'bad-catalog' })).catalog())
+}
+console.log('Catalog contract: query encoding, visit idempotency and public response guards passed')
+const publicFixture = JSON.parse(await readFile(new URL('../fixtures/catalog.json', import.meta.url), 'utf8'))
+assert.deepEqual(await createCommunity(async () => ({ data: publicFixture, request_id: 'rust-catalog-fixture' })).catalog(), publicFixture)
+const invalidAmount = structuredClone(publicFixture)
+invalidAmount.products[0].content.tasks[0].commission_cents = 1.1
+await assert.rejects(createCommunity(async () => ({ data: invalidAmount, request_id: 'invalid-cents' })).catalog())

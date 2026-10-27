@@ -1,0 +1,57 @@
+{
+  "categories": [
+    {
+      "id": "cat",
+      "version": 1,
+      "name": "分类",
+      "sort": 1,
+      "enabled": true
+    }
+  ],
+  "products": [
+    {
+      "id": "product",
+      "release_id": "release",
+      "content": {
+        "name": "产品",
+        "category": "cat",
+        "summary": "简介",
+        "details": "详情纯文本",
+        "limitations": "完成条件须经审核",
+        "estimated_minutes": 10,
+        "regions": [],
+        "qualifications": [],
+        "images": [
+          {
+            "file_id": "image",
+            "alt": "产品说明"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "task",
+            "name": "任务",
+            "version": 1,
+            "completion": "完成操作",
+            "evidence": "提交证据",
+            "rule_version": "rule-1",
+            "commission_cents": 123,
+            "currency": "CNY",
+            "rule_starts_at": 100,
+            "rule_ends_at": 10000,
+            "allow_self": false,
+            "submit_seconds": 2000,
+            "capacity": 1,
+            "digital_limit_cents": 123
+          }
+        ]
+      },
+      "starts_at": 100,
+      "ends_at": 900,
+      "available_tasks": [
+        "task"
+      ]
+    }
+  ],
+  "revision": 2
+}
