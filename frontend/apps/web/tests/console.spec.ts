@@ -3,6 +3,7 @@ interface FixtureRule { id: string; kind: string; status: string; version: numbe
 async function fixtures(page: Page, roles = ['rule_manager', 'identity_reviewer', 'promotion_manager', 'auditor']) {
   const rules: FixtureRule[] = [{ id: 'agreement-1', kind: 'agreements', status: 'published', version: 1, content: { service: '测试协议正文', privacy: '测试隐私正文' } }]
   const commands: { action: string; body: Record<string, unknown>; key: string | undefined }[] = []
+  const catalog: { categories: Record<string, unknown>[]; products: Record<string, unknown>[]; revision: number; server_time: number } = { categories: [], products: [], revision: 0, server_time: 1800000000 }
   let uncertain = false
   await page.route('**/api/v1/community/**', async route => {
     const request = route.request()
@@ -14,11 +15,16 @@ async function fixtures(page: Page, roles = ['rule_manager', 'identity_reviewer'
     if (path.endsWith('/read/rules')) return json(rules)
     if (path.endsWith('/read/managed_codes')) return json([{ id: 'test-code', code: { owner: 'target', active: true, version: 1, product: null, task: null } }])
     if (path.endsWith('/read/users')) return json({ id: 'target', status: 'active', roles: ['user'], scope: ['target'], version: 1, restrictions: [] })
+    if (path.endsWith('/read/eligibility')) return json({ version: 0 })
+    if (path.endsWith('/read/catalog_admin')) return json(catalog)
+    if (path.endsWith('/read/attribution_admin') || path.endsWith('/read/attribution_policies')) return json({ policies: [], touch_count: 0, disputes: [] })
     if (path.endsWith('/read/audit')) return json([])
     if (path.includes('/commands/')) {
       const body = request.postDataJSON() as Record<string, unknown>
       const action = path.split('/').at(-1)!
       commands.push({ action, body, key: request.headers()['idempotency-key'] })
+      if (action === 'category_save') catalog.categories.push({ ...body, id: 'category-1', version: 1 })
+      if (action === 'product_save') catalog.products.push({ id: 'product-1', version: 1, draft: body.content, releases: [], archived: false, offline: true })
       if (action === 'rule_save') {
         rules.push({ id: 'draft-2', kind: body.kind as string, version: 2, status: 'draft', content: body.content as Record<string, unknown> })
       }
@@ -172,4 +178,69 @@ test('transient restore failure allows retry without losing the session', async 
   await page.unroute('**/api/v1/community/read/me')
   await page.getByRole('button', { name: '重试恢复' }).click()
   await expect(page.getByText('欢迎回来，测试管理员')).toBeVisible()
+})
+
+
+test('product classification and draft forms use versioned commands', async ({ page }) => {
+  const commands = await fixtures(page, ['operator', 'product_reviewer'])
+  await login(page)
+  await page.getByRole('menuitem', { name: '产品目录与发布' }).click()
+  await page.getByRole('button', { name: '新增分类', exact: true }).click()
+  await page.getByLabel('分类名称', { exact: true }).fill('测试产品分类')
+  await page.getByLabel('变更原因', { exact: true }).fill('运营维护分类')
+  await page.getByRole('button', { name: '保存分类', exact: true }).click()
+  await expect(page.getByRole('row').filter({ hasText: '测试产品分类' })).toBeVisible()
+  await page.getByRole('button', { name: '新增产品', exact: true }).click()
+  await page.getByLabel('产品名称', { exact: true }).fill('待审核的产品草稿')
+  await page.getByLabel('简介', { exact: true }).fill('测试简介')
+  await page.getByRole('button', { name: '保存产品草稿', exact: true }).click()
+  await expect(page.getByRole('row').filter({ hasText: '待审核的产品草稿' })).toBeVisible()
+  expect(commands[0]).toMatchObject({ action: 'category_save', body: { version: 0, name: '测试产品分类', enabled: true } })
+  expect(commands[1]).toMatchObject({ action: 'product_save', body: { version: 0, content: { name: '待审核的产品草稿', regions: [], qualifications: [] } } })
+})
+
+test('publishing reviewer can inspect products but cannot edit drafts', async ({ page }) => {
+  await fixtures(page, ['product_reviewer'])
+  await login(page)
+  await page.getByRole('menuitem', { name: '产品目录与发布' }).click()
+  await expect(page.getByText('产品与发布版本', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '新增产品', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '新增分类', exact: true })).toHaveCount(0)
+})
+
+test('attribution rule manager explicitly chooses window and first or last touch', async ({ page }) => {
+  const commands = await fixtures(page, ['rule_manager'])
+  await login(page)
+  await page.getByRole('menuitem', { name: '推广归因' }).click()
+  await page.getByLabel('归因有效窗口（秒）', { exact: true }).fill('600')
+  await page.getByLabel('多触点策略', { exact: true }).click()
+  await page.getByText('末触', { exact: true }).click()
+  await page.getByRole('button', { name: '发布新策略版本', exact: true }).click()
+  await expect.poll(() => commands.length).toBe(1)
+  expect(commands[0]).toMatchObject({ action: 'policy_publish', body: { version: 0, window_seconds: 600, strategy: 'last_touch' } })
+})
+
+test('invalid share code returns to public catalog without showing staff login', async ({ page }) => {
+  await page.route('**/api/v1/catalog/touches', route => route.fulfill({ status: 422, json: { error: { code: 'CODE_UNAVAILABLE', message: '推广码不存在或已撤销', request_id: 'invalid-code' } } }))
+  await page.route('**/api/v1/catalog', route => route.fulfill({ json: { data: { products: [], categories: [], revision: 1 }, request_id: 'catalog' } }))
+  await page.goto('/?source=invalid')
+  await expect(page.getByText('推广入口暂不可用', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '返回产品列表', exact: true }).click()
+  await expect(page.getByText('暂无已发布产品', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('管理员账号', { exact: true })).toHaveCount(0)
+})
+
+test('share visits retry with same key while refresh records a distinct visit', async ({ page }) => {
+  const keys = new Set<string>()
+  await page.route('**/api/v1/catalog/touches', route => {
+    expect(route.request().postDataJSON()).toEqual({ code: 'test-code', scene: 'web_share' })
+    keys.add(route.request().headers()['idempotency-key'])
+    return route.fulfill({ json: { data: { touch_token: 'b'.repeat(48), product: null, task: null, notice: '访问不产生佣金数字' }, request_id: 'visit' } })
+  })
+  await page.goto('/?source=test-code')
+  await expect(page.getByText('Crowd 推广邀请', { exact: true })).toBeVisible()
+  expect(keys.size).toBe(1)
+  await page.reload()
+  await expect(page.getByText('Crowd 推广邀请', { exact: true })).toBeVisible()
+  expect(keys.size).toBe(2)
 })
