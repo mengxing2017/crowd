@@ -21,3 +21,7 @@ jobs:
       - run: npm install -g pnpm@11.22.0
       - run: make install
       - run: make check-web
+      - run: pnpm --dir frontend --filter @crowd/web exec playwright install --with-deps chromium
+      - run: pnpm --dir frontend --filter @crowd/web test:e2e
+        env:
+          CROWD_WEB_E2E_PREVIEW: '1'
