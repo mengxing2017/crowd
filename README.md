@@ -113,3 +113,7 @@ devbox run -- make test-business
 Web 首页提供管理员账号密码登录，也可切换小程序一次性票据。`make api-dev` 的嵌入式 PG 自动创建 `admin`：开发后端控制台直接显示本次随机临时密码，也可按 `credential_file` 路径读取私有文件；或预先设置 `CROWD_DEV_ADMIN_PASSWORD`（12–128 字节）。退出后账号和凭据文件随临时数据库清理。
 
 外置数据库可同时设置 `CROWD_BOOTSTRAP_ADMIN_USERNAME` / `CROWD_BOOTSTRAP_ADMIN_PASSWORD` 首次创建管理员，创建后移除；不会覆盖已有账号密码或权限。详见 [开发运行手册](docs/runbooks/embedded-postgres.md) 和 [M01–M04 手册](docs/runbooks/m01-m04.md)。
+
+### Web 管理工作台
+
+管理端现使用 Ant Design Pro 布局，提供工作台、业务规则、用户与权限、推广码管理、审计日志和使用指南，菜单按岗位展示。开发、浏览器回归与实现范围见 [Web 管理端运行手册](docs/runbooks/web-console.md)。
