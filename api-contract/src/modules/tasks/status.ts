@@ -1,0 +1,1 @@
+export const taskStatusNames: Record<string, string> = { claimed: '已领取', in_progress: '执行中', paused: '已暂停', submitted: '待审核', reviewing: '审核中', supplement: '待补交', awaiting_verification: '待独立复核', approved: '审核通过（数字确认待入账）', rejected: '未通过', abandoned: '已放弃', expired: '已失效', disputed: '争议核查中' }
