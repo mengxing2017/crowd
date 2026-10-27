@@ -46,7 +46,7 @@ Crowd 是面向产品推广与任务佣金管理的平台。目标流程为：�
 ```text
 backend/                system 与 community；业务领域、用例、HTTP、端口和 PostgreSQL/微信适配
   migrations/           工程元数据、身份、会话、资料、推广和规则，启动自动迁移
-frontend/apps/web/      React 管理端：一次性票据登录、规则中心、岗位操作、审计及推广落地页
+frontend/apps/web/      React 管理端：管理员密码/一次性票据登录、规则中心、岗位操作、审计及推广落地页
 frontend/apps/miniapp/  uni-app 用户端：微信登录、资料、私有收款图片、推广码、纠错/注销申请
 api-contract/           平台中立类型、注入式 client、运行时响应校验及跨语言序列化样本
 docs/requirements/     M01–M04 四十条需求与实现、依赖的追踪表
@@ -71,7 +71,7 @@ devbox run -- make web-dev
 
 `make api-dev` 等同 `make dev-embedded`，也可运行 `devbox run dev-embedded`。入口自动下载/复用 PostgreSQL 17 二进制、选择随机数据库端口与密码、创建临时 `crowd_dev` 库，执行与正式服务相同的 migration 和推广码 worker，然后启动 API。**正常退出删除临时数据，每次重启重新建库**；安装缓存保留在 `~/.theseus/postgresql`。SIGKILL、系统崩溃等异常中断不保证完成清理。
 
-嵌入式入口忽略 `CROWD_DATABASE_URL` 和外部测试库 URL，不自动读取 `.env`，不会连接已有应用数据库。微信与其他业务配置仍由同一终端 export；不提供绕过微信身份校验的本地用户。首个管理员及协议仍按 [M01–M04 运行记录](docs/runbooks/m01-m04.md) 配置，临时库重启后需重新初始化。
+嵌入式入口忽略 `CROWD_DATABASE_URL` 和外部测试库 URL，不自动读取 `.env`，不会连接已有应用数据库。微信与其他业务配置仍由同一终端 export；不提供绕过微信身份校验的本地用户。开发管理员自动初始化；协议发布与岗位配置见 [M01–M04 运行记录](docs/runbooks/m01-m04.md)，临时库重启后需重新发布协议。
 
 Web 访问 http://127.0.0.1:5173；API 默认监听 127.0.0.1:8080。`CROWD_BIND_ADDR` 可修改 API 端口，嵌入式入口只接受环回地址。`CROWD_API_ORIGIN` 可修改 Vite 代理上游，`RUST_LOG` 控制日志。详见 [嵌入式开发与验证](docs/runbooks/embedded-postgres.md)。
 
@@ -107,3 +107,9 @@ devbox run -- make test-business
 生产设置 `API_IMAGE`、`WEB_IMAGE` 为发布镜像，使用 `docker compose --env-file .env -f compose.yaml up -d --wait`。源码构建上下文必须为仓库根目录。Web 镜像只构建 Web 和 contract，小程序独立发布。公网部署需自行配置 HTTPS 入口。
 
 原骨架检查保留在 [骨架验证记录](docs/runbooks/foundation-validation.md)；新增业务检查及未验证项见 [M01–M04 运行记录](docs/runbooks/m01-m04.md)。
+
+### 管理员登录
+
+Web 首页提供管理员账号密码登录，也可切换小程序一次性票据。`make api-dev` 的嵌入式 PG 自动创建 `admin`：开发后端控制台直接显示本次随机临时密码，也可按 `credential_file` 路径读取私有文件；或预先设置 `CROWD_DEV_ADMIN_PASSWORD`（12–128 字节）。退出后账号和凭据文件随临时数据库清理。
+
+外置数据库可同时设置 `CROWD_BOOTSTRAP_ADMIN_USERNAME` / `CROWD_BOOTSTRAP_ADMIN_PASSWORD` 首次创建管理员，创建后移除；不会覆盖已有账号密码或权限。详见 [开发运行手册](docs/runbooks/embedded-postgres.md) 和 [M01–M04 手册](docs/runbooks/m01-m04.md)。
