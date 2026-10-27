@@ -1,0 +1,120 @@
+{
+  "prices": [
+    {
+      "id": "price",
+      "version": 2,
+      "content": {
+        "task_id": "task",
+        "settlement_scope": "test-scope",
+        "currency": "CNY",
+        "kind": "fixed",
+        "amount_cents": 101,
+        "starts_at": 0,
+        "ends_at": 10100
+      },
+      "editor": "editor",
+      "created_at": 100,
+      "status": "approved",
+      "history": [
+        {
+          "actor": "verifier",
+          "action": "price_review",
+          "at": 100,
+          "reason": "测试独立审批",
+          "status": "approved",
+          "version": 2
+        }
+      ],
+      "reviewer": "verifier",
+      "reason": "测试独立审批",
+      "reviewed_at": 100
+    }
+  ],
+  "templates": [
+    {
+      "id": "template",
+      "version": 2,
+      "content": {
+        "name": "完成业务操作",
+        "task_type": "registration",
+        "completion": "按步骤提供真实说明",
+        "failure_conditions": "伪造证据不通过",
+        "review_goal": "核对业务事实",
+        "source": "manual",
+        "steps": [
+          {
+            "id": "one",
+            "title": "完成第一步",
+            "required": true
+          },
+          {
+            "id": "two",
+            "title": "核对结果",
+            "required": true
+          }
+        ],
+        "fields": [
+          {
+            "id": "description",
+            "kind": "text",
+            "label": "成果说明",
+            "purpose": "人工审核",
+            "required": true,
+            "max_length": 500
+          },
+          {
+            "id": "order",
+            "kind": "order",
+            "label": "订单编号",
+            "purpose": "去重核对",
+            "required": false,
+            "source": "test",
+            "exclusive_scope": "business"
+          },
+          {
+            "id": "photo",
+            "kind": "image",
+            "label": "证明图片",
+            "purpose": "核对执行结果",
+            "required": false
+          }
+        ],
+        "regions": [],
+        "qualifications": [],
+        "execution_seconds": 1000,
+        "submit_seconds": 2000,
+        "claim_until": 5100,
+        "total_quota": 5,
+        "per_user_quota": 2,
+        "participation": "repeat",
+        "allow_abandon": true,
+        "release_on_terminal": true,
+        "allow_withdraw": true,
+        "pause_policy": "extend",
+        "double_review": false,
+        "max_supplements": 2,
+        "supplement_seconds": 200,
+        "review_sla_seconds": 100,
+        "max_evidence_files": 3,
+        "max_file_bytes": 1048576
+      },
+      "editor": "editor",
+      "created_at": 100,
+      "status": "approved",
+      "history": [
+        {
+          "actor": "verifier",
+          "action": "template_review",
+          "at": 100,
+          "reason": "测试独立审批",
+          "status": "approved",
+          "version": 2
+        }
+      ],
+      "reviewer": "verifier",
+      "reason": "测试独立审批",
+      "reviewed_at": 100
+    }
+  ],
+  "server_time": 100
+}

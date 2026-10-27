@@ -6,7 +6,7 @@ export interface Rule { id: string; kind: string; version: number; status: strin
 export interface Promotion { id: string; code: { owner: string; version: number; active: boolean; product: string | null; task: string | null } }
 export interface Login { token: string; user_id: string; expires_in: number }
 export interface ProductImage { file_id: string; alt: string }
-export interface ProductTask { id: string; name: string; version: number; completion: string; evidence: string; rule_version: string; commission_cents: number; currency: 'CNY'; rule_starts_at: number; rule_ends_at: number; allow_self: boolean; submit_seconds: number; capacity?: number | null; digital_limit_cents?: number | null }
+export interface ProductTask { template_id?: string; price_id?: string; template_preview?: TaskTemplate; price_preview?: PriceRule; id: string; name: string; version: number; completion: string; evidence: string; rule_version: string; commission_cents: number; currency: 'CNY'; rule_starts_at: number; rule_ends_at: number; allow_self: boolean; submit_seconds: number; capacity?: number | null; digital_limit_cents?: number | null }
 export interface ProductContent { name: string; category: string; summary: string; details: string; limitations: string; estimated_minutes: number; regions: string[]; qualifications: string[]; images: ProductImage[]; tasks: ProductTask[] }
 export interface Category { id: string; version: number; name: string; enabled: boolean; sort: number; reason: string }
 export interface ProductRelease { id: string; content: ProductContent; starts_at: number; ends_at: number; status: 'pending' | 'approved' | 'rejected' | 'withdrawn'; submitted_by: string; editor: string; review_reason?: string }
@@ -48,6 +48,15 @@ export function createCommunity(transport: Transport) {
         for (const task of product.content.tasks) if (!record(task) || !Number.isSafeInteger(task.commission_cents)) throw new Error('佣金数字响应不符合契约')
       }
     }
+    if (request.path.startsWith('/api/v1/community/read/my_tasks') || request.path.startsWith('/api/v1/community/read/task_queue')) {
+      if (!record(value) || !Array.isArray(value.items) || !(value.next_cursor === null || typeof value.next_cursor === 'string')) throw new Error('任务列表响应不符合契约')
+      for (const item of value.items) if (!record(item) || typeof item.id !== 'string' || !Number.isSafeInteger(item.version) || typeof item.status !== 'string' || !record(item.template) || !Number.isSafeInteger(item.reserved_cents)) throw new Error('任务实例响应不符合契约')
+    }
+    if (request.path.startsWith('/api/v1/community/read/task_rules')) {
+      if (!record(value) || !Array.isArray(value.prices) || !Array.isArray(value.templates) || !Number.isSafeInteger(value.server_time)) throw new Error('任务规则响应不符合契约')
+      for (const rule of [...value.prices, ...value.templates]) if (!record(rule) || typeof rule.id !== 'string' || !Number.isSafeInteger(rule.version) || typeof rule.status !== 'string' || !record(rule.content)) throw new Error('任务规则版本不符合契约')
+      for (const rule of value.prices) { const content = (rule as { content: Record<string, unknown> }).content; if (content.currency !== 'CNY' || (content.kind === 'fixed' && !Number.isSafeInteger(content.amount_cents)) || (content.kind === 'proportional' && (!Number.isSafeInteger(content.numerator) || !Number.isSafeInteger(content.denominator)))) throw new Error('佣金定价响应不符合契约') }
+    }
     return value as T
   }
   return {
@@ -65,3 +74,14 @@ export function createCommunity(transport: Transport) {
     resolve: (code: string) => call<{ code: string; notice: string }>({ method: 'GET', path: `/api/v1/community/resolve/${encodeURIComponent(code)}` }),
   }
 }
+
+export interface PriceRule { kind: 'fixed' | 'proportional'; task_id: string; settlement_scope: string; currency: 'CNY'; starts_at: number; ends_at: number; amount_cents?: number; numerator?: number; denominator?: number; rounding?: 'floor' | 'ceil' | 'half_up'; base_source?: string; cap_cents?: number; period_cap_cents?: number; period_seconds?: number; period_anchor?: number; reservation_policy?: 'reserve_max_release_terminal'; group?: string }
+export interface EvidenceField { id: string; label: string; purpose: string; kind: 'text' | 'image' | 'order'; required: boolean; max_length?: number; source?: string; exclusive_scope?: string }
+export interface TaskTemplate { name: string; task_type: string; completion: string; failure_conditions: string; review_goal: string; source: 'manual' | 'external' | 'both'; external_source?: string; steps: { id: string; title: string; required: boolean }[]; fields: EvidenceField[]; regions: string[]; qualifications: string[]; execution_seconds: number; submit_seconds: number; claim_until: number; total_quota: number; per_user_quota: number; participation: 'once' | 'period' | 'repeat'; period_seconds?: number; period_anchor?: number; allow_abandon: boolean; release_on_terminal: boolean; allow_withdraw: boolean; pause_policy: 'extend' | 'keep_deadline'; double_review: boolean; max_supplements: number; supplement_seconds: number; review_sla_seconds: number; max_evidence_files: number; max_file_bytes: number }
+export interface VersionedTaskRule<T> { id: string; version: number; status: 'pending' | 'approved' | 'rejected' | 'disabled'; editor: string; content: T; reason?: string }
+export interface TaskRules { prices: VersionedTaskRule<PriceRule>[]; templates: VersionedTaskRule<TaskTemplate>[]; server_time: number }
+export interface Evidence { fields: Record<string, string | string[]>; occurred_at?: number }
+export interface TaskSubmission { id: string; version: number; evidence: Evidence; submitted_at: number; declaration_confirmed: boolean }
+export interface TaskInstance extends Claim { corrections?: { id: string; kind: string; status: string; actor: string; reason: string }[]; version: number; template_id: string; template: TaskTemplate; price: PriceRule; started_at?: number; execute_until: number; steps: string[]; draft?: Evidence; preview?: { id: string; evidence: Evidence; at: number }; receipt?: { id: string; version: number; submitted_at: number; evidence?: Evidence | null }; submissions: TaskSubmission[] | null; reviewer?: string; first_reviewer?: string; supplement_fields?: string[]; supplement_until?: number; decisions: { actor: string; reason: string; decision: string }[]; reserved_cents: number; reservation_released: boolean; overdue?: boolean; waiting_seconds?: number; events: { action: string; actor: string; at: number; reason?: string }[] }
+export interface TaskPage { items: TaskInstance[]; next_cursor: string | null; server_time: number }
+export const taskStatusNames: Record<string, string> = { claimed: '已领取', in_progress: '执行中', paused: '已暂停', submitted: '待审核', reviewing: '审核中', supplement: '待补交', awaiting_verification: '待独立复核', approved: '审核通过（数字确认待入账）', rejected: '未通过', abandoned: '已放弃', expired: '已失效', disputed: '争议核查中' }

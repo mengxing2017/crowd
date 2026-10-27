@@ -45,3 +45,20 @@ assert.deepEqual(await createCommunity(async () => ({ data: publicFixture, reque
 const invalidAmount = structuredClone(publicFixture)
 invalidAmount.products[0].content.tasks[0].commission_cents = 1.1
 await assert.rejects(createCommunity(async () => ({ data: invalidAmount, request_id: 'invalid-cents' })).catalog())
+
+const tasks = { items: [{ id: 'claim', version: 2, status: 'in_progress', template: {}, reserved_cents: 101 }], next_cursor: null, server_time: 1800000000 }
+const taskApi = createCommunity(async r => { request = r; return { data: tasks, request_id: 'tasks' } })
+const filter = JSON.stringify({ status: 'submitted', cursor: 'a/b?x=1' })
+assert.deepEqual(await taskApi.read('my_tasks', filter), tasks)
+assert.equal(request.path, `/api/v1/community/read/my_tasks?target=${encodeURIComponent(filter)}`)
+for (const bad of [{}, { items: [], next_cursor: 1 }, { items: [{ id: 'a', version: 1, status: 'claimed', template: {}, reserved_cents: 1.1 }], next_cursor: null }]) await assert.rejects(createCommunity(async () => ({ data: bad, request_id: 'bad-tasks' })).read('my_tasks'))
+await taskApi.command('evidence_submit', { id: 'claim', version: 2, preview_id: 'preview', confirmed: true }, 'submission-key')
+assert.equal(request.key, 'submission-key')
+assert.equal(request.path, '/api/v1/community/commands/evidence_submit')
+console.log('Task contract: integer digits, paginated responses, encoded filters and submission idempotency passed')
+const taskRulesFixture = JSON.parse(await readFile(new URL('../fixtures/task-rules.json', import.meta.url), 'utf8'))
+assert.deepEqual(await createCommunity(async () => ({ data: taskRulesFixture, request_id: 'rust-task-rules' })).read('task_rules'), taskRulesFixture)
+const invalidPriceRule = structuredClone(taskRulesFixture)
+invalidPriceRule.prices[0].content.amount_cents = 1.01
+await assert.rejects(createCommunity(async () => ({ data: invalidPriceRule, request_id: 'unsafe-price' })).read('task_rules'))
+console.log('Task rule contract: shared Rust serialization fixture and pricing guards passed')
