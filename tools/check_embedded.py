@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import stat
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -52,7 +53,13 @@ def check_case(shutdown_signal=None):
             # The example must ignore all external database connection settings.
             "CROWD_DATABASE_URL": "postgres://unused-test-value@invalid.example/never_connect",
             "CROWD_TEST_DATABASE_URL": "postgres://unused-test-value@invalid.example/crowd_test_external",
+            # Production bootstrap configuration must not affect temporary development accounts.
+            "CROWD_BOOTSTRAP_ADMIN_USERNAME": "invalid production username",
+            "CROWD_BOOTSTRAP_ADMIN_PASSWORD": "unused-production-secret",
         }
+        env.pop("CROWD_DEV_ADMIN_PASSWORD", None)
+        if shutdown_signal == signal.SIGTERM:
+            env["CROWD_DEV_ADMIN_PASSWORD"] = "custom-local-admin-password"
         with tempfile.TemporaryFile(mode="w+") as output:
             proc = subprocess.Popen([str(BINARY)], cwd=REPO, env=env, stdout=output, stderr=subprocess.STDOUT)
             try:
@@ -75,11 +82,34 @@ def check_case(shutdown_signal=None):
                         raise AssertionError("embedded API did not become ready")
                     with HTTP.open(f"http://127.0.0.1:{port}/api/v1/system", timeout=2) as response:
                         assert json.load(response)["data"]["attributes"]["application"] == "crowd"
+                    output.seek(0)
+                    events = [json.loads(line).get("fields", {}) for line in output.read().splitlines() if line.startswith("{")]
+                    credentials = Path(next(event["credential_file"] for event in events if "credential_file" in event))
+                    assert stat.S_IMODE(credentials.stat().st_mode) == 0o600
+                    values = dict(line.split("=", 1) for line in credentials.read_text().splitlines())
+                    body = json.dumps({"username": values["username"], "password": values["password"]}).encode()
+                    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/v1/community/admin/login", data=body, headers={"Content-Type": "application/json"})
+                    with HTTP.open(request, timeout=10) as response:
+                        token = json.load(response)["data"]["token"]
+                    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/v1/community/read/rules", headers={"Authorization": f"Bearer {token}"})
+                    with HTTP.open(request, timeout=3) as response:
+                        assert json.load(response)["data"] == []
+                    output.seek(0)
+                    startup_output = output.read()
+                    assert "开发管理员用户名：admin" in startup_output
+                    if "CROWD_DEV_ADMIN_PASSWORD" in env:
+                        assert values["password"] == env["CROWD_DEV_ADMIN_PASSWORD"]
+                        assert "管理员密码：使用 CROWD_DEV_ADMIN_PASSWORD 设置的值" in startup_output
+                        assert values["password"] not in startup_output
+                    else:
+                        assert f"本次临时管理员密码：{values['password']}" in startup_output
+                    assert all(values["password"] not in json.dumps(event) for event in events), "password entered structured application logs"
                     proc.send_signal(shutdown_signal)
                     assert proc.wait(timeout=20) == 0, "shutdown was not graceful"
                 output.seek(0)
                 log = output.read()
                 assert "unused-test-value" not in log, "external connection credential leaked"
+                assert "unused-production-secret" not in log, "production bootstrap credential leaked"
                 assert_database_cleaned(log)
             finally:
                 if proc.poll() is None:

@@ -66,7 +66,33 @@ async fn run_api(
         .acquire_timeout(Duration::from_secs(5))
         .connect(&postgres.settings().url(DATABASE))
         .await?;
-    let result = crowd_api::runtime::serve(pool.clone(), address).await;
+    let result = async {
+        sqlx::migrate!("./migrations").run(&pool).await?;
+        let configured_password = std::env::var("CROWD_DEV_ADMIN_PASSWORD").ok();
+        let password = match &configured_password {
+            Some(password) => password.clone(),
+            None => sqlx::query_scalar::<_, String>("SELECT encode(gen_random_bytes(24),'hex')").fetch_one(&pool).await?,
+        };
+        crowd_api::community::south::adapter::postgres::Repository { pool: pool.clone() }
+            .bootstrap_staff("admin", &password).await.map_err(|_| "development administrator bootstrap failed")?;
+        // Keep the private temporary file as an alternative to local startup output.
+        let credential_file = postgres.settings().data_dir.join("crowd-admin-credentials.txt");
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+        use std::io::Write;
+        let mut file = options.open(&credential_file)?;
+        writeln!(file, "username=admin\npassword={password}")?;
+        tracing::info!(credential_file = %credential_file.display(), "development administrator credentials ready");
+        eprintln!("开发管理员用户名：admin");
+        if configured_password.is_none() {
+            eprintln!("本次临时管理员密码：{password}");
+        } else {
+            eprintln!("管理员密码：使用 CROWD_DEV_ADMIN_PASSWORD 设置的值");
+        }
+        crowd_api::runtime::serve_embedded(pool.clone(), address).await
+    }.await;
     pool.close().await;
     result
 }
