@@ -1,4 +1,9 @@
-use super::*;
+use super::validation::{
+    active, array, conflict, missing, next_time, number, positive, require, version,
+};
+use crate::community::domain::{Failure, Result, State, invalid, text};
+use serde_json::{Value, json};
+
 /// All arithmetic is integral; proportional inputs come exclusively from a verified source.
 pub fn calculate(rule: &Value, base: Option<i64>) -> Result<Value> {
     let raw = match rule["kind"].as_str() {

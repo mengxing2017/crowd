@@ -1,4 +1,3 @@
-use std::future::Future;
-pub trait IdentityProvider: Send + Sync {
-    fn exchange(&self, code: &str) -> impl Future<Output = Result<String, ()>> + Send;
-}
+mod identity_provider;
+
+pub use identity_provider::IdentityProvider;

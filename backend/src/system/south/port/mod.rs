@@ -1,5 +1,3 @@
-use std::future::Future;
+mod readiness_probe;
 
-pub trait ReadinessProbe: Clone + Send + Sync + 'static {
-    fn is_ready(&self) -> impl Future<Output = bool> + Send;
-}
+pub use readiness_probe::ReadinessProbe;
