@@ -1,37 +1,25 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
+import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
+import { LoginForm, ProFormText } from '@ant-design/pro-components'
+import { Alert, Form, Tabs, Typography } from 'antd'
 import { community, setToken, type Login } from './api'
-
-export function AdminLogin({ onAuthenticated }: { onAuthenticated: (session: Login) => Promise<void> }) {
-  const [mode, setMode] = useState<'password' | 'ticket'>('password')
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('')
-  const [ticket, setTicket] = useState('')
+interface Credentials { username: string; password: string; ticket: string }
+export function AdminLogin({ onAuthenticated, initialError }: { onAuthenticated: (session: Login) => Promise<void>; initialError?: string }) {
+  const [mode, setMode] = useState('password')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (busy) return
-    setBusy(true); setError('')
-    try {
-      const session = mode === 'password' ? await community.adminLogin({ username, password }) : await community.redeem(ticket)
-      await onAuthenticated(session)
-      setPassword(''); setTicket('')
-    } catch (e) {
-      setToken('')
-      setError(e instanceof Error ? e.message : '登录失败，请稍后重试')
-    } finally { setBusy(false) }
-  }
-  return <main className="admin-login">
-    <div className="login-intro"><span className="login-brand">CROWD</span><h1>让推广协作<br />有序发生。</h1><p>业务规则、用户管理与推广记录，<br />在同一个工作台中处理。</p><small>佣金仅为业务数字，实际付款由人员在线下完成。</small></div>
-    <section className="login-panel"><h2>管理后台登录</h2><p>使用管理员账号登录，进入岗位工作台。</p>
-      <form onSubmit={event => void submit(event)} aria-busy={busy}>
-        <fieldset disabled={busy}>
-          {mode === 'password' ? <><label htmlFor="admin-username">管理员账号<input id="admin-username" name="username" autoComplete="username" required maxLength={64} value={username} onChange={e => setUsername(e.target.value)} /></label><label htmlFor="admin-password">密码<input id="admin-password" name="password" type="password" autoComplete="current-password" required maxLength={128} value={password} onChange={e => setPassword(e.target.value)} /></label></> : <><p>在已登录的小程序个人中心生成一次性票据，有效期 60 秒。</p><label htmlFor="admin-ticket">一次性登录票据<input id="admin-ticket" name="ticket" autoComplete="off" required value={ticket} onChange={e => setTicket(e.target.value)} /></label></>}
-          {error && <p className="login-error" role="alert">{error}</p>}
-          <button className="login-submit" type="submit">{busy ? '正在登录…' : '登录管理后台'}</button>
-          <button className="login-switch" type="button" onClick={() => { setMode(mode === 'password' ? 'ticket' : 'password'); setPassword(''); setTicket(''); setError('') }}>{mode === 'password' ? '使用小程序一次性票据登录' : '使用管理员账号密码登录'}</button>
-        </fieldset>
-      </form><small>仅限已获授权的工作人员使用。登录后仍按岗位和数据范围授权。</small>
-    </section>
-  </main>
+  const [error, setError] = useState(initialError || '')
+  const [form] = Form.useForm<Credentials>()
+  return <div className="login-page"><header className="login-header"><span className="brand-mark">C</span><span>Crowd</span><span className="login-header-label">运营管理平台</span></header><main className="login-content">
+    <LoginForm<Credentials> form={form} title="Crowd 运营管理" subTitle="让业务有据可依，让每一次协作都有记录" logo={<SafetyCertificateOutlined style={{ color: '#1677ff', fontSize: 36 }} />} initialValues={{ username: 'admin' }} submitter={{ searchConfig: { submitText: busy ? '正在登录…' : '登录' }, submitButtonProps: { 'aria-label': '登录', loading: busy, size: 'large', block: true } }} onFinish={async values => {
+      if (busy) return false
+      setBusy(true); setError('')
+      try { const session = mode === 'password' ? await community.adminLogin({ username: values.username, password: values.password }) : await community.redeem(values.ticket); await onAuthenticated(session); form.resetFields(['password', 'ticket']); return true }
+      catch (error) { setToken(''); setError(error instanceof Error ? error.message : '登录失败，请稍后重试'); return false }
+      finally { setBusy(false) }
+    }}>
+      <Tabs activeKey={mode} centered items={[{ key: 'password', label: '账号密码登录', disabled: busy }, { key: 'ticket', label: '小程序票据登录', disabled: busy }]} onChange={value => { setMode(value); setError(''); form.resetFields(['password', 'ticket']) }} />
+      {error && <Alert className="login-alert" showIcon type="error" title={error} />}
+      {mode === 'password' ? <><ProFormText name="username" label="管理员账号" disabled={busy} fieldProps={{ size: 'large', prefix: <UserOutlined />, autoComplete: 'username', maxLength: 64 }} placeholder="请输入管理员账号" rules={[{ required: true, whitespace: true, message: '请输入管理员账号' }]} /><ProFormText.Password name="password" label="密码" disabled={busy} fieldProps={{ size: 'large', prefix: <LockOutlined />, autoComplete: 'current-password', maxLength: 128 }} placeholder="请输入密码" rules={[{ required: true, message: '请输入密码' }]} /></> : <><Typography.Paragraph type="secondary">在已登录的小程序个人中心生成一次性票据，有效期 60 秒。</Typography.Paragraph><ProFormText name="ticket" label="一次性登录票据" disabled={busy} fieldProps={{ size: 'large', autoComplete: 'off' }} placeholder="请输入一次性登录票据" rules={[{ required: true, whitespace: true, message: '请输入一次性票据' }]} /></>}
+    </LoginForm><Typography.Paragraph type="secondary" className="login-caption">仅限获授权的工作人员使用 · 按岗位与数据范围授权</Typography.Paragraph>
+  </main><footer className="login-footer">Crowd · 产品推广与协作平台<p>佣金仅为业务数字，实际付款由人员在线下完成。</p></footer></div>
 }

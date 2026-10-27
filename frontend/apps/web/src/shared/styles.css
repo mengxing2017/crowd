@@ -1,17 +1,40 @@
-body { margin: 0; font-family: system-ui, sans-serif; color: #172f35; background: #f3f7f6; } main { max-width: 1000px; margin: auto; padding: 32px 24px; } section, article { background: white; border: 1px solid #cfddd9; border-radius: 12px; padding: 20px; margin: 20px 0; } label { display: block; margin: 12px 0; } input, textarea, select { display: block; box-sizing: border-box; width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #8da6a0; border-radius: 5px; font: inherit; } button { padding: 10px 18px; margin: 6px 8px 6px 0; background: #176955; color: white; border: 0; border-radius: 5px; cursor: pointer; } button:disabled { opacity: .45; cursor: default; } pre { white-space: pre-wrap; overflow-wrap: anywhere; } [role=status] { overflow-wrap: anywhere; }
+:root { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #1f2329; background: #f5f5f5; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+body { margin: 0; }
+* { box-sizing: border-box; }
+.full-width { width: 100%; }
+.brand-mark { display: inline-flex; justify-content: center; align-items: center; width: 32px; height: 32px; border-radius: 9px; color: white; background: #1677ff; font-size: 23px; font-weight: 800; box-shadow: 0 3px 10px #1677ff30; }
+.admin-shell { min-height: 100vh; }
+.account-menu { cursor: pointer; }
+.workspace-footer { padding: 24px; text-align: center; color: #8c8c8c; font-size: 12px; }
+.workspace-footer span { margin-left: 20px; }
+.welcome-banner { background: linear-gradient(110deg, #eaf3ff 0%, #f3f7ff 58%, #e2edff 100%); position: relative; overflow: hidden; }
+.welcome-copy { position: relative; z-index: 1; }
+.welcome-symbol { position: absolute; right: 8%; top: 20px; font-size: 180px; color: #1677ff14; transform: rotate(-10deg); }
+.quick-card { height: 100%; }
+.quick-title { padding-left: 0; font-weight: 500; }
+.account-summary { margin-top: 24px; }
+.account-summary .ant-descriptions-item-content { overflow-wrap: anywhere; }
+.filter-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.section-note { margin-top: 16px; margin-bottom: 0 !important; }
+.stack-card { margin-top: 24px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; border-radius: 8px; background: #f6f8fa; font-size: 13px; line-height: 1.7; }
+.preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-input { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.ant-drawer-body .ant-alert + .ant-form, .ant-modal-body .ant-alert + .ant-form { margin-top: 24px; }
+.login-page { min-height: 100vh; display: flex; flex-direction: column; background: radial-gradient(ellipse at 15% 10%, #dbeaff88, transparent 48%), radial-gradient(ellipse at 90% 80%, #d6e8ff88, transparent 45%), #f7f9fc; }
+.login-header { display: flex; align-items: center; gap: 12px; padding: 24px 40px; font-size: 22px; font-weight: 650; }
+.login-header-label { font-size: 14px; font-weight: 400; color: #8c8c8c; border-left: 1px solid #d9d9d9; padding-left: 12px; }
+.login-content { flex: 1; padding: 32px 20px; }
+.login-content .ant-pro-form-login-container { max-width: 480px; margin: auto; padding: 32px 40px; border: 1px solid #edf0f5; border-radius: 16px; background: #ffffffdd; box-shadow: 0 12px 48px #1747770a; }
+.login-content .ant-pro-form-login-main { width: 100%; min-width: 0; max-width: 360px; }
+.login-alert { margin-bottom: 20px; overflow-wrap: anywhere; }
+.login-caption { margin: 20px auto 0; text-align: center; font-size: 12px; }
+.login-footer { text-align: center; padding: 24px; font-size: 12px; color: #8c8c8c; }
+.login-footer p { margin-bottom: 0; }
+.promotion-landing { max-width: 680px; margin: 8vh auto; padding: 20px; }
+.promotion-code { overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+@media (max-width: 600px) { .login-header { padding: 20px; } .login-content { padding: 16px; } .login-content .ant-pro-form-login-container { padding: 24px; } .welcome-symbol { right: -25px; opacity: .5; } .workspace-footer span { display: block; margin: 8px 0 0; } .ant-form-inline { gap: 12px; } .ant-form-inline .ant-form-item { max-width: 100%; } .promotion-landing { margin-top: 24px; } }
 
-.admin-login { max-width: 1080px; min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; box-sizing: border-box; }
-.login-intro h1 { font-size: clamp(32px, 4vw, 48px); line-height: 1.3; letter-spacing: -1px; margin: 30px 0 20px; }
-.login-intro p { line-height: 1.9; color: #526b65; }
-.login-brand { font-weight: 800; letter-spacing: 5px; color: #176955; }
-.login-intro small { display: block; margin-top: 48px; line-height: 1.8; }
-.login-panel { padding: 36px; box-shadow: 0 16px 48px #173d3010; }
-.login-panel h2 { margin-top: 0; font-size: 26px; }
-.login-panel p, .login-panel small { color: #526b65; line-height: 1.6; }
-.login-panel fieldset { padding: 0; border: 0; min-width: 0; }
-.login-panel input { padding: 12px; }
-.login-panel input:focus-visible { outline: 2px solid #176955; outline-offset: 2px; }
-.login-submit { width: 100%; margin: 18px 0 4px; padding: 13px; }
-.login-switch { background: transparent; color: #176955; width: 100%; margin: 4px 0 20px; }
-.login-panel .login-error { color: #9b2828; overflow-wrap: anywhere; }
-@media (max-width: 720px) { .admin-login { grid-template-columns: 1fr; gap: 12px; padding: 28px 20px; } .login-intro h1 { font-size: 32px; margin: 18px 0; } .login-intro small { margin-top: 16px; } .login-panel { padding: 24px; margin: 8px 0; } }
+.page-loading { min-height: 220px; display: grid; place-items: center; }
+
+.session-loading { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8c8c8c; }

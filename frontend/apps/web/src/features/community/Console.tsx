@@ -1,43 +1,105 @@
-import { useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { BookOutlined, DashboardOutlined, FileProtectOutlined, LogoutOutlined, QrcodeOutlined, ReloadOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
+import { PageContainer, ProLayout } from '@ant-design/pro-components'
+import { Alert, Button, Dropdown, Space, Spin, Tag, Tooltip, Result } from 'antd'
 import { AdminLogin } from './AdminLogin'
-import { community, setToken } from './api/client'
-import { BusinessError, type Rule, type User } from './api'
-const kinds: Record<string, string> = { business_chain: '业务闭环定义', operator: '平台责任主体', roles: '角色职责', completion: '任务完成口径', review: '平台审核口径', product_tasks: '产品与任务关系', attribution: '推广关系边界', digital_boundary: '数字记录边界', amount_unit: '整数分与展示单位', release_scope: '首期范围与变更影响', agreements: '服务协议与隐私说明' }
+import { community, setToken, hasToken, BusinessError, type Rule, type User } from './api'
+import { sections, type Section } from './model'
+const Welcome = lazy(() => import('./pages/Welcome').then(module => ({ default: module.Welcome })))
+const RuleCenter = lazy(() => import('./pages/RuleCenter').then(module => ({ default: module.RuleCenter })))
+const UserManagement = lazy(() => import('./pages/UserManagement').then(module => ({ default: module.UserManagement })))
+const Promotions = lazy(() => import('./pages/Promotions').then(module => ({ default: module.Promotions })))
+const AuditLog = lazy(() => import('./pages/AuditLog').then(module => ({ default: module.AuditLog })))
+const Guide = lazy(() => import('./pages/Guide').then(module => ({ default: module.Guide })))
+const icons = { welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
+interface Pending { action: string; body: Record<string, unknown>; key: string; owner: string }
+function currentSection(): Section { return sections.find(section => `#/${section.key}` === window.location.hash)?.key || 'welcome' }
+async function readStaffSession() {
+  const user = await community.read<User>('me')
+  if (user.status !== 'active' || !user.roles.some(role => role !== 'user')) {
+    setToken('')
+    throw new Error('此账号未获有效管理后台岗位授权')
+  }
+  const rules = user.roles.includes('rule_manager') ? await community.read<Rule[]>('rules') : []
+  return { user, rules }
+}
 export function Console() {
+  const [restoring, setRestoring] = useState(hasToken)
+  const [restoreError, setRestoreError] = useState('')
+  const [restoreAttempt, setRestoreAttempt] = useState(0)
   const [me, setMe] = useState<User | null>(null)
   const [rules, setRules] = useState<Rule[]>([])
-  const [kind, setKind] = useState('operator')
-  const [content, setContent] = useState('{}')
-  const [target, setTarget] = useState('')
-  const [action, setAction] = useState('users')
-  const [input, setInput] = useState('{}')
-  const [result, setResult] = useState<unknown>(null)
-  const [message, setMessage] = useState('')
+  const [section, setSection] = useState<Section>(currentSection)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string }>()
   const [busy, setBusy] = useState(false)
-  const [pending, setPending] = useState<{ action: string; body: Record<string, unknown>; key: string; owner: string } | null>(null)
-  async function run(work: () => Promise<void>) { setBusy(true); setMessage('处理中…'); try { await work(); setMessage('操作完成') } catch (e) { if (e instanceof BusinessError && e.detail.code === 'SESSION_EXPIRED') { setMe(null); setToken(''); setRules([]); setResult(null); setInput('{}'); setContent('{}'); setTarget('') } setMessage(e instanceof Error ? e.message : '操作失败，请查询原结果') } finally { setBusy(false) } }
-  async function refresh() { const user = await community.read<User>('me'); setMe(user); if (user.roles.includes('rule_manager')) setRules(await community.read<Rule[]>('rules')) }
-  async function submit(name: string, body: Record<string, unknown>) {
-    const next = { action: name, body, key: crypto.randomUUID(), owner: me?.id || '' }; setPending(next)
-    try { const value = await community.command(next.action, next.body, next.key); setResult(value); setPending(null); await refresh() } catch (e) { if (e instanceof BusinessError && !['SERVICE_UNAVAILABLE'].includes(e.detail.code)) setPending(null); throw e }
+  const locked = useRef(false)
+  const [pending, setPending] = useState<Pending | null>(null)
+  useEffect(() => { const onHash = () => setSection(currentSection()); window.addEventListener('hashchange', onHash); return () => window.removeEventListener('hashchange', onHash) }, [])
+  useEffect(() => {
+    if (!hasToken()) { setRestoring(false); return }
+    let active = true
+    void readStaffSession().then(session => {
+      if (!active) return
+      setMe(session.user); setRules(session.rules); setRestoreError('')
+    }).catch((error: unknown) => {
+      if (!active) return
+      const text = error instanceof Error ? error.message : '恢复登录状态失败，请重试'
+      if (!hasToken()) setNotice({ type: 'error', text })
+      else setRestoreError(text)
+    }).finally(() => { if (active) setRestoring(false) })
+    return () => { active = false }
+  }, [restoreAttempt])
+  function navigate(next: Section) { setSection(next); window.location.hash = `/${next}`; setNotice(undefined) }
+  function clearSession(keepPending = false) { setToken(''); setMe(null); setRules([]); setNotice(undefined); if (!keepPending) setPending(null) }
+  async function run(work: () => Promise<void>): Promise<boolean> {
+    if (locked.current) return false
+    locked.current = true; setBusy(true); setNotice(undefined)
+    try { await work(); setNotice({ type: 'success', text: '操作完成' }); return true }
+    catch (error) {
+      if (error instanceof BusinessError && error.detail.code === 'SESSION_EXPIRED') clearSession(true)
+      setNotice({ type: 'error', text: error instanceof Error ? error.message : '操作失败，请查询原结果后重试' }); return false
+    } finally { locked.current = false; setBusy(false) }
   }
-  if (!me) return <AdminLogin onAuthenticated={async session => {
-    setToken(session.token)
+  async function refresh() {
     const user = await community.read<User>('me')
-    if (!user.roles.some(role => role !== 'user')) throw new Error('此账号未获管理后台岗位授权')
     const nextRules = user.roles.includes('rule_manager') ? await community.read<Rule[]>('rules') : []
+    setMe(user); setRules(nextRules)
+  }
+  async function save(action: string, body: Record<string, unknown>) {
+    const saved = await run(async () => {
+      if (pending) throw new Error('请先查询上次提交结果，或使用原请求重试')
+      const next = { action, body, key: crypto.randomUUID(), owner: me?.id || '' }; setPending(next)
+      try { await community.command(next.action, next.body, next.key); setPending(null) }
+      catch (error) { if (error instanceof BusinessError && error.detail.code !== 'SERVICE_UNAVAILABLE') setPending(null); throw error }
+    })
+    // A failed refresh cannot turn a confirmed write into an unconfirmed submission.
+    if (saved) await run(refresh)
+    return saved
+  }
+  if (restoring) return <div className="session-loading" role="status"><Spin size="large" /><p>正在恢复登录状态…</p></div>
+  if (restoreError) return <Result status="warning" title="暂时无法恢复登录状态" subTitle={restoreError} extra={<Space><Button type="primary" onClick={() => { setRestoring(true); setRestoreError(''); setRestoreAttempt(attempt => attempt + 1) }}>重试恢复</Button><Button onClick={() => { clearSession(); setRestoreError('') }}>返回登录</Button></Space>} />
+  if (!me) return <AdminLogin initialError={notice?.type === 'error' ? notice.text : undefined} onAuthenticated={async session => {
+    setToken(session.token)
+    const { user, rules: nextRules } = await readStaffSession()
     if (pending && pending.owner !== session.user_id) setPending(null)
-    setRules(nextRules); setMe(user); setMessage('')
+    setRules(nextRules); setMe(user); setNotice(undefined)
   }} />
-  return <main><h1>Crowd 运营管理</h1><p>佣金仅为业务数字。付款由人员在线下完成，本系统不提供支付或资金托管。</p>
-    <p role="status">{message}</p>
-    <>
-      <p>{me.nickname} · {me.status} · {me.roles.join('、')}</p><button disabled={busy} onClick={() => void run(async () => { try { await community.command('logout', {}, crypto.randomUUID()) } finally { setToken(''); setMe(null); setRules([]); setResult(null); setPending(null); setContent('{}'); setInput('{}'); setTarget('') } })}>退出登录并清理缓存</button>
-      {me.roles.includes('rule_manager') && <section><h2>业务规则中心</h2><label>规则类型<select value={kind} onChange={e => setKind(e.target.value)}>{Object.entries(kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><p>保存为草稿后单独发布；未确认限制保留在待确认项中。协议内容字段为 service、privacy；数字边界必须 manual_only: true。产品任务目录格式：products 数组，产品含 id、status、tasks；任务含 id、status、completion、evidence。状态为 active 或 inactive。</p><label>版本内容（JSON 对象）<textarea rows={8} value={content} onChange={e => setContent(e.target.value)} /></label><button disabled={busy || !!pending} onClick={() => void run(async () => { await submit('rule_save', { kind, content: JSON.parse(content) as Record<string, unknown>, version: rules.filter(r => r.kind === kind).length }) })}>保存新草稿</button>
-      {rules.length === 0 && <p>暂无规则版本。</p>}{rules.map(rule => <article key={rule.id}><h3>{kinds[rule.kind]} · V{rule.version} · {rule.status}</h3><pre>{JSON.stringify(rule.content, null, 2)}</pre>{rule.status !== 'disabled' && <button disabled={busy || !!pending} onClick={() => void run(async () => { await submit(rule.status === 'draft' ? 'rule_publish' : 'rule_disable', { id: rule.id, version: rule.version }) })}>{rule.status === 'draft' ? '发布此版本' : '停用此版本'}</button>}</article>)}</section>}
-      <section><h2>岗位操作与审计</h2><p>服务端检查动作权限及对象范围；不具备权限的请求会被拒绝。完整收款资料必须由申请服务提供授权上下文，目前不向后台开放。</p><label>对象用户或审计对象<input value={target} onChange={e => setTarget(e.target.value)} /></label><label>操作<select value={action} onChange={e => setAction(e.target.value)}><option value="users">查询用户权限与状态</option><option value="audit">查询审计</option><option value="managed_codes">查询用户推广码</option><option value="access">配置角色与数据范围</option><option value="restriction">限制账号</option><option value="code_rotate">撤销并换发推广码</option></select></label><label>操作参数（JSON 对象，修改须包含 version、reason；换码须包含 id、approval）<textarea rows={6} value={input} onChange={e => setInput(e.target.value)} /></label><button disabled={busy || !!pending} onClick={() => void run(async () => { if (['users', 'audit', 'managed_codes'].includes(action)) setResult(await community.read(action, target)); else await submit(action, { ...(JSON.parse(input) as Record<string, unknown>), user_id: target }) })}>执行</button></section>
-      {pending && <section><p>上次提交结果尚未确认，请先查询原结果。重试会使用原请求键与原内容。</p><button disabled={busy} onClick={() => void run(async () => { setResult(await community.read('command_result', pending.key)); setPending(null); await refresh() })}>查询原结果</button><button disabled={busy} onClick={() => void run(async () => { setResult(await community.command(pending.action, pending.body, pending.key)); setPending(null); await refresh() })}>重试原提交</button></section>}
-      {result !== null && <section><h2>操作结果</h2><pre>{JSON.stringify(result, null, 2)}</pre></section>}
-    </>
-  </main>
+  const available = sections.filter(item => !item.role || me.roles.includes(item.role))
+  const active = available.find(item => item.key === section) || available[0]
+  return <div className="admin-shell"><ProLayout title="Crowd" logo={<span className="brand-mark">C</span>} layout="mix" navTheme="light" fixSiderbar fixedHeader contentWidth="Fluid" location={{ pathname: `/${active.key}` }} route={{ path: '/', routes: available.map(item => ({ path: `/${item.key}`, name: item.title, icon: icons[item.key] })) }} menuItemRender={(item, dom) => <a href={`#${item.path}`} onClick={event => { event.preventDefault(); navigate(item.path?.slice(1) as Section) }}>{dom}</a>} avatarProps={{ icon: <UserOutlined />, title: me.nickname, render: (_, dom) => <Dropdown menu={{ items: [{ key: 'guide', label: '使用指南', icon: <BookOutlined /> }, { type: 'divider' }, { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, disabled: busy }], onClick: ({ key }) => { if (key === 'guide') navigate('guide'); else if (key === 'logout') void run(async () => { try { await community.command('logout', {}, crypto.randomUUID()) } finally { clearSession() } }) } }}><span className="account-menu">{dom}</span></Dropdown> }} actionsRender={() => [<Tooltip title="刷新当前账号与规则" key="refresh"><Button type="text" aria-label="刷新当前账号与规则" icon={<ReloadOutlined spin={busy} />} disabled={busy} onClick={() => void run(refresh)} /></Tooltip>, <Tooltip title="使用指南" key="guide"><Button type="text" aria-label="使用指南" icon={<BookOutlined />} onClick={() => navigate('guide')} /></Tooltip>]} footerRender={() => <footer className="workspace-footer">Crowd · 产品推广与协作平台 <span>业务数字记录 · 人工线下结算</span></footer>}>
+    <PageContainer title={active.title} content={active.description} breadcrumb={{ items: [{ title: '运营管理' }, { title: active.title }] }} extra={<Tag color="blue">{me.status === 'active' ? '正常工作中' : '账号受限'}</Tag>}>
+      <Space orientation="vertical" size={20} className="full-width">
+        {notice && <Alert type={notice.type} showIcon title={notice.text} closable onClose={() => setNotice(undefined)} />}
+        {pending && pending.owner === me.id && <Alert type="warning" showIcon title="上次提交结果尚未确认" description="请先查询原结果；重试将使用原动作、内容和请求键。" action={<Space wrap><Button loading={busy} onClick={() => void run(async () => { await community.read('command_result', pending.key); setPending(null); await refresh() })}>查询原结果</Button><Button disabled={busy} onClick={() => void run(async () => { await community.command(pending.action, pending.body, pending.key); setPending(null); await refresh() })}>原请求重试</Button></Space>} />}
+        <Spin spinning={busy} delay={300}><Suspense fallback={<div className="page-loading"><Spin /></div>}>
+          {active.key === 'welcome' && <Welcome me={me} rules={rules} navigate={navigate} />}
+          {active.key === 'rules' && <RuleCenter rules={rules} busy={busy} pending={!!pending} save={save} />}
+          {active.key === 'users' && <UserManagement actorId={me.id} busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'promotions' && <Promotions busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'audit' && <AuditLog busy={busy} run={run} />}
+          {active.key === 'guide' && <Guide />}
+        </Suspense></Spin>
+      </Space>
+    </PageContainer>
+  </ProLayout></div>
 }
