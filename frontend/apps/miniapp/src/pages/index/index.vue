@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { tasks } from '../../features/tasks/api'
+import { identity } from '../../features/identity/api'
+import { governance } from '../../features/governance/api'
+import { catalog as catalogApi } from '../../features/catalog/api'
+import { attribution } from '../../features/attribution/api'
 import TaskCenter from '../../features/tasks/TaskCenter.vue'
 import { onMounted, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
@@ -50,13 +55,13 @@ function key() { return `${Date.now()}-${++counter}-${Math.random().toString(36)
 onLoad(query => { if (typeof query?.source === 'string') { source.value = query.source; void visit(query.source) } })
 async function visit(code: string) {
   try {
-    const touch = await community.touch({ code, scene: 'miniapp_share' }, key())
+    const touch = await attribution.touch({ code, scene: 'miniapp_share' }, key())
     touchTokens.value.push(touch.touch_token); fallback.value = ''
     if (me.value) await submit('touch_bind', { touch_token: touch.touch_token })
   } catch (e) { fallback.value = `${e instanceof Error ? e.message : '推广码不可用'}；可返回产品列表继续浏览。` }
 }
 async function loadCatalog() {
-  const next = await community.catalog({ keyword: keyword.value, category: categoryFilter.value || undefined, min_cents: minimum.value ? Number(minimum.value) : undefined, max_cents: maximum.value ? Number(maximum.value) : undefined, sort: sort.value })
+  const next = await catalogApi.catalog({ keyword: keyword.value, category: categoryFilter.value || undefined, min_cents: minimum.value ? Number(minimum.value) : undefined, max_cents: maximum.value ? Number(maximum.value) : undefined, sort: sort.value })
   catalog.value = next
   if (selected.value) selected.value = next.products.find(p => p.id === selected.value?.id) || null
 }
@@ -70,15 +75,15 @@ function cents(value: number) { return `${Math.trunc(value / 100)}.${String(valu
 const imageOrigin = import.meta.env.VITE_API_ORIGIN || 'http://127.0.0.1:8080'
 
 onShow(() => { void run(loadCatalog) })
-onMounted(() => { void run(async () => { await loadCatalog(); agreement.value = await community.agreements() }) })
+onMounted(() => { void run(async () => { await loadCatalog(); agreement.value = await identity.agreements() }) })
 let runningCount = 0
 async function run(work: () => Promise<void>) { runningCount += 1; busy.value = true; message.value = '处理中…'; try { await work(); message.value = '操作完成' } catch (e) { if (e instanceof BusinessError && e.detail.code === 'SESSION_EXPIRED') clearPrivate(); message.value = e instanceof Error ? e.message : '操作失败，请查询原结果' } finally { runningCount -= 1; busy.value = runningCount > 0 } }
 async function refresh() {
-  const user = await community.read<User>('me'); me.value = user; nickname.value = user.nickname
-  attributionDisputes.value = (await community.read<{ disputes: { id: string; claim_id: string; status: string; decision_reason?: string }[] }>('my_attribution')).disputes
-  claims.value = await community.read<Claim[]>('my_claims'); notifications.value = await community.read<CatalogNotification[]>('catalog_notifications')
+  const user = await identity.me(); me.value = user; nickname.value = user.nickname
+  attributionDisputes.value = (await attribution.mine()).disputes
+  claims.value = await tasks.claims(); notifications.value = await catalogApi.notifications()
   taskRevision.value += 1
-  codes.value = await community.read<Promotion[]>('codes'); cases.value = await community.read<{ id: string; kind: string; status: string }[]>('cases')
+  codes.value = await attribution.codes(); cases.value = await governance.cases()
 }
 async function submit(action: string, body: Record<string, unknown>) {
   if (pending.value) throw new Error('请先查询上次提交结果，或使用原请求重试')
@@ -88,7 +93,7 @@ async function submit(action: string, body: Record<string, unknown>) {
 async function login() {
   if (source.value && touchTokens.value.length === 0) await visit(source.value)
   const credential = await uni.login({ provider: 'weixin' })
-  const session = await community.login({ code: credential.code, agreed: agreed.value, agreement_id: agreement.value?.id, source: source.value || undefined, touch_token: touchTokens.value[0] })
+  const session = await identity.login({ code: credential.code, agreed: agreed.value, agreement_id: agreement.value?.id, source: source.value || undefined, touch_token: touchTokens.value[0] })
   if (pending.value && pending.value.owner !== session.user_id) pending.value = null; setToken(session.token); for (const token of touchTokens.value) await community.command('touch_bind', { touch_token: token }, key()); await refresh()
 }
 async function choose(purpose: 'avatar' | 'wechat_receipt') {
@@ -143,7 +148,7 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
       <text v-else>协议暂不可用，新用户注册暂不开放。</text><input v-model="source" placeholder="推广来源码（可选）" />
       <checkbox-group @change="agreed = $event.detail.value.includes('agree')"><label><checkbox value="agree" :checked="agreed" />我已阅读并主动同意本版本服务协议与隐私说明</label></checkbox-group>
       <button :disabled="busy" @click="run(login)">微信登录／会话过期后重新登录</button>
-      <button :disabled="busy" @click="run(async () => { agreement = await community.agreements() })">重新加载协议</button>
+      <button :disabled="busy" @click="run(async () => { agreement = await identity.agreements() })">重新加载协议</button>
     </view>
     <template v-else>
       <TaskCenter :key="me.id" :busy="busy" :pending="!!pending" :revision="taskRevision" :submit="submit" :run="run" />

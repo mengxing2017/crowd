@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { tasks } from './api'
 import { onMounted, ref, watch } from 'vue'
-import { community, download, fileUrl, upload } from '../community/api/client'
+import { download, fileUrl, upload } from '../community/api/client'
 import { taskStatusNames, type Evidence, type TaskInstance, type TaskPage } from '../community/api'
 const props = defineProps<{ busy: boolean; pending: boolean; revision: number; submit: (action: string, body: Record<string, unknown>) => Promise<Record<string, unknown>>; run: (work: () => Promise<void>) => Promise<void> }>()
 const page = ref<TaskPage>()
@@ -13,14 +14,14 @@ const reason = ref('')
 const previewImages = ref<string[]>([])
 const statuses = Object.entries(taskStatusNames)
 async function load(more = false) {
-  const next = await community.read<TaskPage>('my_tasks', JSON.stringify({ status: status.value || undefined, cursor: more ? page.value?.next_cursor : undefined }))
+  const next = await tasks.mine(JSON.stringify({ status: status.value || undefined, cursor: more ? page.value?.next_cursor : undefined }))
   page.value = more && page.value ? { ...next, items: [...page.value.items, ...next.items] } : next
-  if (selected.value) selected.value = await community.read<TaskInstance>('task_detail', selected.value.id)
+  if (selected.value) selected.value = await tasks.detail(selected.value.id)
 }
 onMounted(() => { void props.run(() => load()) })
 watch(() => props.revision, () => { void props.run(() => load()) })
 function resetDraft() { const t=selected.value; draft.value=JSON.parse(JSON.stringify(t?.draft || (t?.status==='supplement' ? t.receipt?.evidence : undefined) || { fields: {} })) as Evidence; occurred.value=draft.value.occurred_at ? new Date(draft.value.occurred_at*1000).toISOString() : ''; confirmed.value=false }
-async function open(t: TaskInstance) { selected.value = await community.read<TaskInstance>('task_detail', t.id); resetDraft(); reason.value = ''; previewImages.value = [] }
+async function open(t: TaskInstance) { selected.value = await tasks.detail(t.id); resetDraft(); reason.value = ''; previewImages.value = [] }
 async function act(action: string, body: Record<string, unknown> = {}) {
   if (!selected.value) return
   const result = await props.submit(action, { id: selected.value.id, version: selected.value.version, ...body })

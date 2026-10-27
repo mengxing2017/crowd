@@ -8,8 +8,22 @@
     "noEmit": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "lib": ["ES2020", "DOM"],
-    "types": ["@dcloudio/types", "vite/client"]
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
+    "types": [
+      "@dcloudio/types",
+      "vite/client"
+    ],
+    "paths": {
+      "@crowd/api-contract/*": [
+        "../../../api-contract/src/modules/*/index.ts"
+      ]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue"
+  ]
 }
