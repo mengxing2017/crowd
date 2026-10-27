@@ -1,5 +1,5 @@
 export { createCommunity, BusinessError } from '@crowd/api-contract/community'
-export type { User, Rule, Promotion, Receipt, Login, Request } from '@crowd/api-contract/community'
+export type { User, Rule, Promotion, Receipt, Login, Request, Product, ProductContent, ProductTask, ProductRelease, Category, CatalogAdmin, PublicProduct, PublicCatalog, Claim, AttributionAdmin, AttributionPolicy, AttributionDispute, CatalogNotification } from '@crowd/api-contract/community'
 import { createCommunity } from '@crowd/api-contract/community'
 const sessionKey = 'crowd.web.session'
 function storedToken(): string {
@@ -25,3 +25,10 @@ export const community = createCommunity(async request => {
   if (result.status === 401 && token === requestToken) setToken('')
   return result.json() as Promise<unknown>
 })
+
+export async function uploadProductImage(file: File): Promise<string> {
+  const response = await fetch('/api/v1/community/files/product_image', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' }, body: file })
+  const value = await response.json() as { data?: { id: string }; error?: { message: string; request_id: string } }
+  if (!value.data) throw new Error(`${value.error?.message || '上传失败'}（${value.error?.request_id || ''}）`)
+  return value.data.id
+}

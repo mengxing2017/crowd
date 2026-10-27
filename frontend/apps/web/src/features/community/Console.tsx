@@ -11,7 +11,9 @@ const UserManagement = lazy(() => import('./pages/UserManagement').then(module =
 const Promotions = lazy(() => import('./pages/Promotions').then(module => ({ default: module.Promotions })))
 const AuditLog = lazy(() => import('./pages/AuditLog').then(module => ({ default: module.AuditLog })))
 const Guide = lazy(() => import('./pages/Guide').then(module => ({ default: module.Guide })))
-const icons = { welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
+const Catalog = lazy(() => import('./pages/Catalog').then(module => ({ default: module.Catalog })))
+const Attribution = lazy(() => import('./pages/Attribution').then(module => ({ default: module.Attribution })))
+const icons = { catalog: <BookOutlined />, attribution: <QrcodeOutlined />, welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
 interface Pending { action: string; body: Record<string, unknown>; key: string; owner: string }
 function currentSection(): Section { return sections.find(section => `#/${section.key}` === window.location.hash)?.key || 'welcome' }
 async function readStaffSession() {
@@ -84,7 +86,7 @@ export function Console() {
     if (pending && pending.owner !== session.user_id) setPending(null)
     setRules(nextRules); setMe(user); setNotice(undefined)
   }} />
-  const available = sections.filter(item => !item.role || me.roles.includes(item.role))
+  const available = sections.filter(item => (!item.role || me.roles.includes(item.role)) && (!item.roles || item.roles.some(role => me.roles.includes(role))))
   const active = available.find(item => item.key === section) || available[0]
   return <div className="admin-shell"><ProLayout title="Crowd" logo={<span className="brand-mark">C</span>} layout="mix" navTheme="light" fixSiderbar fixedHeader contentWidth="Fluid" location={{ pathname: `/${active.key}` }} route={{ path: '/', routes: available.map(item => ({ path: `/${item.key}`, name: item.title, icon: icons[item.key] })) }} menuItemRender={(item, dom) => <a href={`#${item.path}`} onClick={event => { event.preventDefault(); navigate(item.path?.slice(1) as Section) }}>{dom}</a>} avatarProps={{ icon: <UserOutlined />, title: me.nickname, render: (_, dom) => <Dropdown menu={{ items: [{ key: 'guide', label: '使用指南', icon: <BookOutlined /> }, { type: 'divider' }, { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, disabled: busy }], onClick: ({ key }) => { if (key === 'guide') navigate('guide'); else if (key === 'logout') void run(async () => { try { await community.command('logout', {}, crypto.randomUUID()) } finally { clearSession() } }) } }}><span className="account-menu">{dom}</span></Dropdown> }} actionsRender={() => [<Tooltip title="刷新当前账号与规则" key="refresh"><Button type="text" aria-label="刷新当前账号与规则" icon={<ReloadOutlined spin={busy} />} disabled={busy} onClick={() => void run(refresh)} /></Tooltip>, <Tooltip title="使用指南" key="guide"><Button type="text" aria-label="使用指南" icon={<BookOutlined />} onClick={() => navigate('guide')} /></Tooltip>]} footerRender={() => <footer className="workspace-footer">Crowd · 产品推广与协作平台 <span>业务数字记录 · 人工线下结算</span></footer>}>
     <PageContainer title={active.title} content={active.description} breadcrumb={{ items: [{ title: '运营管理' }, { title: active.title }] }} extra={<Tag color="blue">{me.status === 'active' ? '正常工作中' : '账号受限'}</Tag>}>
@@ -97,6 +99,8 @@ export function Console() {
           {active.key === 'users' && <UserManagement actorId={me.id} busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'promotions' && <Promotions busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'audit' && <AuditLog busy={busy} run={run} />}
+          {active.key === 'catalog' && <Catalog me={me} busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'attribution' && <Attribution me={me} busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'guide' && <Guide />}
         </Suspense></Spin>
       </Space>
