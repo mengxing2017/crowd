@@ -4,6 +4,7 @@ async function fixtures(page: Page, roles = ['rule_manager', 'identity_reviewer'
   const rules: FixtureRule[] = [{ id: 'agreement-1', kind: 'agreements', status: 'published', version: 1, content: { service: '测试协议正文', privacy: '测试隐私正文' } }]
   const commands: { action: string; body: Record<string, unknown>; key: string | undefined }[] = []
   const catalog: { categories: Record<string, unknown>[]; products: Record<string, unknown>[]; revision: number; server_time: number } = { categories: [], products: [], revision: 0, server_time: 1800000000 }
+  const taskRules: { prices: Record<string, unknown>[]; templates: Record<string, unknown>[]; server_time: number } = { prices: [], templates: [], server_time: 1800000000 }
   let uncertain = false
   await page.route('**/api/v1/community/**', async route => {
     const request = route.request()
@@ -18,11 +19,14 @@ async function fixtures(page: Page, roles = ['rule_manager', 'identity_reviewer'
     if (path.endsWith('/read/eligibility')) return json({ version: 0 })
     if (path.endsWith('/read/catalog_admin')) return json(catalog)
     if (path.endsWith('/read/attribution_admin') || path.endsWith('/read/attribution_policies')) return json({ policies: [], touch_count: 0, disputes: [] })
+    if (path.endsWith('/read/task_rules')) return json(taskRules)
+    if (path.endsWith('/read/task_queue')) return json({ items: [], next_cursor: null, server_time: 1800000000 })
     if (path.endsWith('/read/audit')) return json([])
     if (path.includes('/commands/')) {
       const body = request.postDataJSON() as Record<string, unknown>
       const action = path.split('/').at(-1)!
       commands.push({ action, body, key: request.headers()['idempotency-key'] })
+      if (action === 'price_save' || action === 'template_save') { const rule = { id: body.id, version: 1, editor: 'staff', status: 'pending', content: body.content }; (action === 'price_save' ? taskRules.prices : taskRules.templates).push(rule) }
       if (action === 'category_save') catalog.categories.push({ ...body, id: 'category-1', version: 1 })
       if (action === 'product_save') catalog.products.push({ id: 'product-1', version: 1, draft: body.content, releases: [], archived: false, offline: true })
       if (action === 'rule_save') {
@@ -243,4 +247,80 @@ test('share visits retry with same key while refresh records a distinct visit', 
   await page.reload()
   await expect(page.getByText('Crowd 推广邀请', { exact: true })).toBeVisible()
   expect(keys.size).toBe(2)
+})
+
+
+test('versioned pricing form preserves integer cents and requires independent review', async ({ page }, testInfo) => {
+  const commands = await fixtures(page, ['rule_manager', 'verifier'])
+  await login(page)
+  await page.getByRole('menuitem', { name: '定价与任务模板' }).click()
+  await page.getByRole('button', { name: '新建定价版本' }).click()
+  await page.getByLabel('新版本唯一编号').fill('price-browser-v1')
+  await page.getByLabel('适用任务编号').fill('task-browser')
+  await page.getByLabel('结算范围编号').fill('scope-browser')
+  await page.getByLabel('定价方式').click()
+  await page.locator('.ant-select-dropdown:visible').getByText('固定整数分', { exact: true }).click()
+  await expect(page.getByRole('dialog').getByTitle('固定整数分', { exact: true })).toBeVisible()
+  await page.getByLabel('固定数字（整数分）').fill('101')
+  await page.getByLabel('生效时间').fill('2026-10-28T12:00')
+  await page.getByLabel('失效时间').fill('2026-11-28T12:00')
+  await page.getByRole('button', { name: '保存并等待另一人员审核' }).click()
+  const row = page.getByRole('row').filter({ hasText: 'price-browser-v1' })
+  await expect(row).toBeVisible()
+  await expect(row.getByRole('button', { name: '独立审核' })).toBeDisabled()
+  expect(commands.find(c => c.action === 'price_save')?.body).toMatchObject({ id: 'price-browser-v1', version: 0, content: { kind: 'fixed', amount_cents: 101, currency: 'CNY', task_id: 'task-browser' } })
+  await page.screenshot({ path: testInfo.outputPath('versioned-pricing.png'), fullPage: true })
+})
+
+test('task reviewer sees queue states and batch guard without pricing write access', async ({ page }, testInfo) => {
+  await fixtures(page, ['task_reviewer'])
+  await login(page)
+  await expect(page.getByRole('menuitem', { name: '定价与任务模板' })).toHaveCount(0)
+  await page.getByRole('menuitem', { name: '任务审核与质量' }).click()
+  await expect(page.getByText('暂无匹配待审任务')).toBeVisible()
+  await expect(page.getByRole('button', { name: '校验并预览选中任务' })).toBeDisabled()
+  await page.screenshot({ path: testInfo.outputPath('task-review-queue.png'), fullPage: true })
+})
+
+test('auditor cannot enter task pricing or review through direct hashes', async ({ page }) => {
+  await fixtures(page, ['auditor'])
+  await login(page)
+  await page.goto('/#/taskRules')
+  await expect(page.getByRole('button', { name: '新建定价版本' })).toHaveCount(0)
+  await page.goto('/#/tasks')
+  await expect(page.getByRole('button', { name: '刷新待审任务' })).toHaveCount(0)
+})
+
+test('reviewer claims task, confirms checklist and submits a versioned decision', async ({ page }) => {
+  await fixtures(page, ['task_reviewer'])
+  const task = { id: 'task-instance-1', version: 7, owner: 'user', product_id: 'product', product: { name: '测试产品' }, template: { name: '业务任务', task_type: 'registration', completion: '完成注册', failure_conditions: '虚假成果不通过', review_goal: '核对事实', fields: [], double_review: false }, price: { kind: 'fixed', amount_cents: 101 }, status: 'submitted', reserved_cents: 101, steps: [], submissions: null, decisions: [], events: [], receipt: { id: 'submission-1', version: 1, submitted_at: 1800000000 } } as Record<string, unknown>
+  const decisions: Record<string, unknown>[] = []
+  await page.route('**/api/v1/community/read/task_*', route => route.fulfill({ json: { data: new URL(route.request().url()).pathname.endsWith('task_queue') ? { items: task.status === 'approved' ? [] : [task], next_cursor: null, server_time: 1800000010 } : task, request_id: 'task-detail' } }))
+  await page.route('**/api/v1/community/commands/review_*', async route => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    expect(body.version).toBe(task.version)
+    if (route.request().url().endsWith('review_claim')) { task.status = 'reviewing'; task.reviewer = 'staff' }
+    else { decisions.push(body); task.status = 'approved' }
+    task.version = Number(task.version) + 1
+    return route.fulfill({ json: { data: task, request_id: 'review-command' } })
+  })
+  await login(page)
+  await page.getByRole('menuitem', { name: '任务审核与质量' }).click()
+  await page.getByRole('button', { name: '处理详情' }).click()
+  await page.getByRole('button', { name: '独占领取审核' }).click()
+  await expect(page.getByRole('button', { name: '审核通过', exact: true })).toBeDisabled()
+  await page.getByLabel('处理原因').fill('依据快照和证据核对通过')
+  await page.getByRole('checkbox', { name: '已核对领取快照、完成条件、全部必填证据、订单去重和定价版本' }).check()
+  await page.getByRole('button', { name: '审核通过', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('审核通过（数字确认待入账）')
+  expect(decisions).toHaveLength(1)
+  expect(decisions[0]).toMatchObject({ id: 'task-instance-1', version: 8, decision: 'approve', checklist_confirmed: true })
+})
+
+test('independent verifier has review queue access without initial review or batch permission', async ({ page }) => {
+  await fixtures(page, ['verifier'])
+  await login(page)
+  await page.getByRole('menuitem', { name: '任务审核与质量' }).click()
+  await expect(page.getByText('暂无匹配待审任务')).toBeVisible()
+  await expect(page.getByRole('button', { name: '校验并预览选中任务' })).toHaveCount(0)
 })
