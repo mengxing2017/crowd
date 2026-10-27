@@ -16,6 +16,8 @@ pub fn text<'a>(v: &'a Value, field: &str) -> Result<&'a str> {
 }
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct State {
+    #[serde(default)]
+    pub catalog: crate::catalog::domain::Catalog,
     pub users: BTreeMap<String, User>,
     pub rules: Vec<Value>,
     pub codes: BTreeMap<String, Code>,
@@ -158,6 +160,23 @@ impl State {
                 Err(invalid("任务入口必须指定产品"))
             };
         };
+        if self.catalog.products.contains_key(product) {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            let release = self.visible_release(product, now)?;
+            if task.is_some_and(|task| {
+                !release["content"]["tasks"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|t| t["id"] == task)
+            }) {
+                return Err(Failure("TARGET_UNAVAILABLE", "目标任务不存在"));
+            }
+            return Ok(());
+        }
         let catalogue = self
             .rules
             .iter()
@@ -204,6 +223,9 @@ impl State {
         }.inspect(|_| { self.log(actor,section,target,request,time); })
     }
     pub fn check_command_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
+        if crate::catalog::domain::is_command(action) {
+            return self.catalog_access(actor, action, input);
+        }
         let fields = match action {
             "profile" => Some(&["nickname", "avatar", "version"][..]),
             "receipt" => Some(
@@ -475,6 +497,9 @@ impl State {
                             "promotion_manager",
                             "auditor",
                             "operator",
+                            "product_reviewer",
+                            "product_emergency",
+                            "attribution_reviewer",
                             "task_reviewer",
                             "settlement_reviewer",
                             "manual_handler",

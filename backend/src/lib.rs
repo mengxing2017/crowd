@@ -1,3 +1,4 @@
+pub mod catalog;
 pub mod community;
 pub mod runtime;
 pub mod system;

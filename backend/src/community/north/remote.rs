@@ -17,7 +17,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
 static REQUEST: AtomicU64 = AtomicU64::new(1);
-fn request_id() -> String {
+pub(crate) fn request_id() -> String {
     format!(
         "{:x}-{:x}-{:x}",
         std::process::id(),
@@ -35,7 +35,7 @@ fn token(headers: &HeaderMap) -> &str {
         .and_then(|v| v.strip_prefix("Bearer "))
         .unwrap_or("")
 }
-fn response(result: Result<Value, Failure>, request: &str) -> Response {
+pub(crate) fn response(result: Result<Value, Failure>, request: &str) -> Response {
     let (status, value) = match result {
         Ok(v) => (StatusCode::OK, json!({"data":v,"request_id":request})),
         Err(Failure(code, message)) => {
@@ -72,6 +72,9 @@ fn parse(body: Result<Json<Value>, JsonRejection>) -> Result<Value, Failure> {
 }
 pub fn routes() -> Router<Application> {
     Router::new()
+        .route("/api/v1/catalog", get(catalog))
+        .route("/api/v1/catalog/touches", post(touch))
+        .route("/api/v1/catalog/images/{id}", get(product_image))
         .route("/api/v1/community/agreements", get(agreements))
         .route("/api/v1/community/login", post(login))
         .route("/api/v1/community/admin/login", post(staff_login))
@@ -275,4 +278,58 @@ async fn staff_login(
         Err(e) => Err(e),
     };
     response(result, &r)
+}
+
+#[derive(Deserialize)]
+struct CatalogQuery {
+    keyword: Option<String>,
+    category: Option<String>,
+    min_cents: Option<i64>,
+    max_cents: Option<i64>,
+    sort: Option<String>,
+    task_status: Option<String>,
+}
+async fn catalog(
+    State(app): State<Application>,
+    query: Result<Query<CatalogQuery>, axum::extract::rejection::QueryRejection>,
+) -> Response {
+    let r = request_id();
+    let result=match query {Ok(Query(q))=>app.community.public_catalog(&json!({"keyword":q.keyword,"category":q.category,"min_cents":q.min_cents,"max_cents":q.max_cents,"sort":q.sort,"task_status":q.task_status})).await, Err(_)=>Err(Failure("INVALID_INPUT","目录筛选参数无效"))};
+    response(result, &r)
+}
+async fn touch(
+    State(app): State<Application>,
+    headers: HeaderMap,
+    body: Result<Json<Value>, JsonRejection>,
+) -> Response {
+    let r = request_id();
+    let result = match (
+        headers
+            .get("idempotency-key")
+            .and_then(|v| v.to_str().ok())
+            .filter(|s| !s.is_empty() && s.len() <= 128),
+        parse(body),
+    ) {
+        (Some(key), Ok(v)) => app.community.touch(&v, key, &r).await,
+        _ => Err(Failure(
+            "INVALID_INPUT",
+            "访问需合法 JSON 及 Idempotency-Key",
+        )),
+    };
+    response(result, &r)
+}
+async fn product_image(State(app): State<Application>, Path(id): Path<String>) -> Response {
+    let r = request_id();
+    match app.community.product_image(&id).await {
+        Ok((mime, bytes)) => (
+            [
+                ("content-type", mime),
+                ("cache-control", "no-store".into()),
+                ("x-content-type-options", "nosniff".into()),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(e) => response(Err(e), &r),
+    }
 }

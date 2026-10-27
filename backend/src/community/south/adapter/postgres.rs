@@ -59,6 +59,25 @@ impl Repository {
             .await
             .map_err(database)
     }
+    pub async fn epoch(tx: &mut Transaction<'_, Postgres>) -> Result<i64> {
+        sqlx::query_scalar("SELECT floor(extract(epoch FROM clock_timestamp()))::bigint")
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(database)
+    }
+    pub async fn public_product_image(
+        tx: &mut Transaction<'_, Postgres>,
+        id: &str,
+    ) -> Result<(String, Vec<u8>)> {
+        sqlx::query_as(
+            "SELECT mime,content FROM crowd_files WHERE id=$1 AND purpose='product_image'",
+        )
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(database)?
+        .ok_or(Failure("NOT_FOUND", "图片不存在"))
+    }
     pub async fn time(tx: &mut Transaction<'_, Postgres>) -> Result<String> {
         sqlx::query_scalar("SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')").fetch_one(&mut **tx).await.map_err(database)
     }
@@ -132,6 +151,10 @@ impl Repository {
             id
         };
         state.user(&id)?;
+        if let Some(touch) = input["touch_token"].as_str() {
+            let epoch = Self::epoch(&mut tx).await?;
+            state.bind_touch(&id, touch, epoch)?;
+        }
         let token = Self::entropy(&mut tx).await?;
         let ttl = std::env::var("CROWD_SESSION_SECONDS")
             .ok()
@@ -252,7 +275,7 @@ impl Repository {
         purpose: &str,
         bytes: Vec<u8>,
     ) -> Result<Value> {
-        if !["avatar", "wechat_receipt"].contains(&purpose) {
+        if !["avatar", "wechat_receipt", "product_image"].contains(&purpose) {
             return Err(invalid("文件用途无效"));
         }
         // Engineering resource ceiling, not a confirmed business image policy.

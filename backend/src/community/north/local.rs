@@ -58,7 +58,16 @@ impl Service {
         let actor = Repository::authenticate(&mut tx, token).await?;
         let mut state = Repository::load(&mut tx).await?;
         let now = Repository::time(&mut tx).await?;
-        let result = state.read(&actor, section, target.unwrap_or(&actor), request, &now);
+        let epoch = Repository::epoch(&mut tx).await?;
+        let result = if crate::catalog::domain::is_read(section) {
+            let result = state.catalog_read(&actor, section, target.unwrap_or(&actor), epoch);
+            if result.is_ok() {
+                state.log(&actor, section, target.unwrap_or(&actor), request, &now);
+            }
+            result
+        } else {
+            state.read(&actor, section, target.unwrap_or(&actor), request, &now)
+        };
         if let Err(ref failure) = result {
             state.log_failure(
                 &actor,
@@ -84,7 +93,20 @@ impl Service {
         let mut tx = self.repo.begin().await?;
         let actor = Repository::authenticate(&mut tx, token).await?;
         let mut state = Repository::load(&mut tx).await?;
-        state.check_command_access(&actor, action, input)?;
+        if let Err(failure) = state.check_command_access(&actor, action, input) {
+            let now = Repository::time(&mut tx).await?;
+            state.log_failure(
+                &actor,
+                action,
+                input["id"].as_str().unwrap_or(&actor),
+                request,
+                &now,
+                failure.0,
+            );
+            Repository::save(&mut tx, &state).await?;
+            Repository::commit(tx).await?;
+            return Err(failure);
+        }
         let idempotency = format!("{actor}:{key}");
         if let Some(previous) = state.idempotency.get(&idempotency) {
             if previous["action"] != action || previous["input"] != *input {
@@ -106,6 +128,8 @@ impl Service {
             )
             .await?;
         }
+        Self::validate_catalog_files(&mut tx, &state, &actor, action, input).await?;
+        let epoch = Repository::epoch(&mut tx).await?;
         let generated = Repository::entropy(&mut tx).await?;
         let now = Repository::time(&mut tx).await?;
         let before = state.clone();
@@ -127,6 +151,55 @@ impl Service {
                     .ok_or(Failure("NOT_FOUND", "资料不存在"))?;
                 state.log(&actor, "REQ-03-008", id, request, &now);
                 receipt
+            } else if crate::catalog::domain::is_command(action) {
+                let result = state.catalog_command(&actor, action, input, &generated, epoch)?;
+                state.log(
+                    &actor,
+                    action,
+                    input["id"]
+                        .as_str()
+                        .or_else(|| input["user_id"].as_str())
+                        .or_else(|| input["claim_id"].as_str())
+                        .or_else(|| result["id"].as_str())
+                        .unwrap_or(&actor),
+                    request,
+                    &now,
+                );
+                if let Some(audit) = state.audit.last_mut() {
+                    audit["rule_version"] = json!("M05-M07-v1");
+                    audit["result_ref"] = result["id"].clone();
+                    audit["requirements"] = json!(match action {
+                        "category_save" | "category_migrate" => vec!["REQ-06-002"],
+                        "product_save" => vec![
+                            "REQ-06-001",
+                            "REQ-06-003",
+                            "REQ-06-004",
+                            "REQ-06-005",
+                            "REQ-06-008",
+                            "REQ-07-001"
+                        ],
+                        "product_submit" => vec!["REQ-07-002", "REQ-07-003"],
+                        "product_review" =>
+                            vec!["REQ-06-009", "REQ-07-003", "REQ-07-004", "REQ-07-007"],
+                        "product_offline" => vec!["REQ-07-005", "REQ-07-006", "REQ-07-010"],
+                        "product_archive" => vec!["REQ-06-010"],
+                        "product_rollback" => vec!["REQ-07-008"],
+                        "policy_publish" => vec!["REQ-05-002", "REQ-05-003"],
+                        "touch_bind" => vec!["REQ-05-004"],
+                        "task_claim" =>
+                            vec!["REQ-05-005", "REQ-05-006", "REQ-05-007", "REQ-06-007"],
+                        "attribution_dispute" | "dispute_resolve" => vec!["REQ-05-008"],
+                        "eligibility_verify" => vec!["REQ-06-004"],
+                        _ => vec![],
+                    });
+                    audit["reason"] = input["reason"].clone();
+                    audit["risk_id"] = input["risk_id"].clone();
+                    audit["impact"] = input["impact"].clone();
+                    audit["object_version"] = input["version"].clone();
+                    audit["release_id"] = input["release_id"].clone();
+                    audit["policy_version"] = result["policy"]["version"].clone();
+                }
+                result
             } else {
                 state.command(&actor, action, input, &generated, request, &now)?
             })
@@ -165,6 +238,9 @@ impl Service {
         let mut state = Repository::load(&mut tx).await?;
         if state.user(&actor)?.status != "active" {
             return Err(Failure("ACCOUNT_RESTRICTED", "账号当前不可修改资料"));
+        }
+        if purpose == "product_image" {
+            state.authorize(&actor, "operator", "platform")?;
         }
         let result = Repository::upload(&mut tx, &actor, purpose, bytes).await?;
         let now = Repository::time(&mut tx).await?;

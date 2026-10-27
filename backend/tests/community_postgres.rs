@@ -291,6 +291,16 @@ async fn postgres_registration_sessions_files_and_concurrent_commands() {
     assert!(service.read(alice, "me", None, "logged-out").await.is_err());
     let web_token = web["token"].as_str().unwrap();
     assert!(service.read(web_token, "me", None, "web").await.is_ok());
+    catalog_flow(
+        &service,
+        &pool,
+        web_token,
+        bob,
+        uid,
+        b["user_id"].as_str().unwrap(),
+    )
+    .await
+    .unwrap();
     sqlx::query("UPDATE crowd_sessions SET expires_at=now()-interval '1 second'")
         .execute(&pool)
         .await
@@ -388,4 +398,319 @@ async fn postgres_registration_sessions_files_and_concurrent_commands() {
     );
     assert!(!serde_json::to_string(&state).unwrap().contains(secret));
     pool.close().await;
+}
+
+async fn catalog_flow(
+    service: &Service,
+    pool: &sqlx::PgPool,
+    alice: &str,
+    bob: &str,
+    alice_id: &str,
+    bob_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut tx = service.repo.begin().await.unwrap();
+    let mut state = Repository::load(&mut tx).await.unwrap();
+    state
+        .users
+        .get_mut(alice_id)
+        .unwrap()
+        .roles
+        .extend(["operator".into(), "rule_manager".into()]);
+    state.users.get_mut(alice_id).unwrap().scope = vec!["*".into()];
+    state
+        .users
+        .get_mut(bob_id)
+        .unwrap()
+        .roles
+        .extend(["product_reviewer".into(), "attribution_reviewer".into()]);
+    state.users.get_mut(bob_id).unwrap().scope = vec!["*".into()];
+    let now = Repository::epoch(&mut tx).await.unwrap();
+    Repository::save(&mut tx, &state).await.unwrap();
+    Repository::commit(tx).await.unwrap();
+    let category = service
+        .command(
+            alice,
+            "category_save",
+            &json!({"name":"测试分类","version":0,"enabled":true,"sort":1,"reason":"测试"}),
+            "catalog-category",
+            "category",
+        )
+        .await
+        .unwrap();
+    service
+        .command(
+            alice,
+            "policy_publish",
+            &json!({"version":0,"window_seconds":3600,"strategy":"last_touch"}),
+            "catalog-policy",
+            "policy",
+        )
+        .await
+        .unwrap();
+    let image = image::RgbImage::from_pixel(2, 2, image::Rgb([0, 0, 0]));
+    let mut bytes = std::io::Cursor::new(vec![]);
+    image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+    let image = service
+        .upload(alice, "product_image", bytes.into_inner(), "product-image")
+        .await
+        .unwrap();
+    let content = json!({"name":"真实数据库产品","category":category["id"],"summary":"公开简介","details":"产品详情","limitations":"必须完成指定任务","estimated_minutes":10,"regions":[],"qualifications":[],"images":[{"file_id":image["id"],"alt":"说明"}],"tasks":[{"id":"test-task","name":"任务","version":1,"completion":"人工核查","evidence":"任务证据","rule_version":"test-rule","commission_cents":123,"currency":"CNY","rule_starts_at":now-60,"rule_ends_at":now+7200,"allow_self":false,"submit_seconds":3600,"capacity":1,"digital_limit_cents":123}]});
+    let private_file = service
+        .read(alice, "me", None, "receipt-source")
+        .await
+        .unwrap()["receipts"][0]["file_id"]
+        .clone();
+    let mut invalid_content = content.clone();
+    invalid_content["images"][0]["file_id"] = private_file;
+    assert!(
+        service
+            .command(
+                alice,
+                "product_save",
+                &json!({"content":invalid_content,"version":0}),
+                "catalog-private-image",
+                "private-image"
+            )
+            .await
+            .is_err(),
+        "receipt must never become a product image"
+    );
+    let product = service
+        .command(
+            alice,
+            "product_save",
+            &json!({"content":content,"version":0}),
+            "catalog-draft",
+            "draft",
+        )
+        .await
+        .unwrap();
+    let id = product["id"].as_str().unwrap();
+    assert!(
+        service
+            .product_image(image["id"].as_str().unwrap())
+            .await
+            .is_err(),
+        "draft images must remain private"
+    );
+    assert!(
+        service.public_catalog(&json!({})).await.unwrap()["products"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let submitted = service
+        .command(
+            alice,
+            "product_submit",
+            &json!({"id":id,"version":1,"starts_at":now-1,"ends_at":now+1800}),
+            "catalog-submit",
+            "submit",
+        )
+        .await
+        .unwrap();
+    service.command(bob,"product_review",&json!({"id":id,"version":2,"release_id":submitted["release_id"],"approved":true,"reason":"内容和规则已检查"}),"catalog-review","review").await.unwrap();
+    let public = service
+        .public_catalog(&json!({"keyword":"数据库","min_cents":100,"max_cents":200}))
+        .await
+        .unwrap();
+    assert_eq!(public["products"].as_array().unwrap().len(), 1);
+    assert!(
+        service
+            .product_image(image["id"].as_str().unwrap())
+            .await
+            .is_ok()
+    );
+    {
+        use axum::{
+            body::{Body, to_bytes},
+            http::{Request, StatusCode},
+        };
+        use tower::ServiceExt;
+        let response = crowd_api::router(pool.clone())
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/catalog?keyword=%E6%95%B0%E6%8D%AE%E5%BA%93")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 32768).await.unwrap()).unwrap();
+        assert_eq!(
+            body["data"]["products"][0]["content"]["name"],
+            "真实数据库产品"
+        );
+        assert!(!body.to_string().contains(alice_id));
+    }
+    let code = service.read(alice, "codes", None, "codes").await.unwrap()[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let touch_input = json!({"code":code,"scene":"integration"});
+    let (t1, t2) = tokio::join!(
+        service.touch(&touch_input, "same-visit", "visit1"),
+        service.touch(&touch_input, "same-visit", "visit2")
+    );
+    let t = t1.unwrap();
+    assert_eq!(t, t2.unwrap());
+    service
+        .command(
+            bob,
+            "touch_bind",
+            &json!({"touch_token":t["touch_token"]}),
+            "catalog-bind",
+            "bind",
+        )
+        .await
+        .unwrap();
+    let queued_token = "c".repeat(48);
+    sqlx::query("INSERT INTO crowd_sessions VALUES(encode(digest($1,'sha256'),'hex'),'queued',now()+interval '1 hour')").bind(&queued_token).execute(pool).await.unwrap();
+    assert!(
+        service
+            .command(
+                &queued_token,
+                "touch_bind",
+                &json!({"touch_token":t["touch_token"]}),
+                "steal-touch",
+                "steal"
+            )
+            .await
+            .is_err()
+    );
+    let input = json!({"id":id,"release_id":submitted["release_id"],"task_id":"test-task","confirmed":true});
+    let (one, two) = tokio::join!(
+        service.command(bob, "task_claim", &input, "catalog-claim-bob", "claim1"),
+        service.command(
+            &queued_token,
+            "task_claim",
+            &input,
+            "catalog-claim-queued",
+            "claim2"
+        )
+    );
+    assert_ne!(
+        one.is_ok(),
+        two.is_ok(),
+        "last slot may only have one winner"
+    );
+    let (winner, winner_key, claim) = if let Ok(c) = one {
+        (bob, "catalog-claim-bob", c)
+    } else {
+        (&*queued_token, "catalog-claim-queued", two.unwrap())
+    };
+    assert_eq!(
+        service
+            .command(winner, "task_claim", &input, winner_key, "retry")
+            .await
+            .unwrap(),
+        claim
+    );
+    assert_eq!(
+        service
+            .read(winner, "command_result", Some(winner_key), "recover")
+            .await
+            .unwrap(),
+        claim
+    );
+    assert!(
+        service
+            .command(
+                winner,
+                "task_claim",
+                &json!({"id":id,"confirmed":false}),
+                winner_key,
+                "changed"
+            )
+            .await
+            .is_err()
+    );
+    let mut edited = content.clone();
+    edited["name"] = json!("尚未审核的新名称");
+    service
+        .command(
+            alice,
+            "product_save",
+            &json!({"id":id,"version":3,"content":edited}),
+            "catalog-edit",
+            "edit",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .read(winner, "my_claims", None, "snapshot")
+            .await
+            .unwrap()[0]["product"]["name"],
+        "真实数据库产品"
+    );
+    assert_eq!(
+        service.public_catalog(&json!({})).await.unwrap()["products"][0]["content"]["name"],
+        "真实数据库产品"
+    );
+    // Offline and new claims serialize under the same aggregate lock. Any later claim is rejected.
+    service
+        .command(
+            alice,
+            "product_offline",
+            &json!({"id":id,"version":4,"stock_policy":"continue_existing","reason":"测试下架"}),
+            "catalog-offline",
+            "offline",
+        )
+        .await
+        .unwrap();
+    assert!(
+        service
+            .command(
+                &queued_token,
+                "task_claim",
+                &input,
+                "after-offline",
+                "offline-claim"
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        service.public_catalog(&json!({})).await.unwrap()["products"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        service
+            .product_image(image["id"].as_str().unwrap())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        service
+            .read(winner, "my_claims", None, "preserved")
+            .await
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        service
+            .read(winner, "catalog_notifications", None, "notifications")
+            .await
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["kind"] == "product_offline")
+    );
+    let mut tx = service.repo.begin().await.unwrap();
+    let state = Repository::load(&mut tx).await.unwrap();
+    assert_eq!(state.catalog.claims.len(), 1);
+    assert_eq!(state.catalog.touches.len(), 1);
+    assert!(state.catalog.completions.is_empty());
+    assert!(state.audit.iter().any(|a| a["action"] == "task_claim"));
+    Ok(())
 }

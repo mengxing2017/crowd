@@ -57,6 +57,10 @@ impl Repository {
             "identity_reviewer",
             "promotion_manager",
             "auditor",
+            "operator",
+            "product_reviewer",
+            "product_emergency",
+            "attribution_reviewer",
         ]
         .map(str::to_owned)
         .to_vec();
