@@ -1,6 +1,7 @@
+import { attribution } from '../../attribution/api'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Statistic, Table, Tag } from 'antd'
-import { community, type AttributionAdmin, type AttributionDispute, type User } from '../api'
+import { type AttributionAdmin, type AttributionDispute, type User } from '../api'
 import type { Run, Save } from '../model'
 export function Attribution({ me, busy, pending, run, save }: { me: User; busy: boolean; pending: boolean; run: Run; save: Save }) {
   const [data, setData] = useState<AttributionAdmin>()
@@ -8,7 +9,7 @@ export function Attribution({ me, busy, pending, run, save }: { me: User; busy: 
   const [form] = Form.useForm()
   const locked = busy || pending
   const reviewer = me.roles.includes('attribution_reviewer')
-  async function load() { setData(await community.read<AttributionAdmin>(reviewer ? 'attribution_admin' : 'attribution_policies', me.scope.includes('*') ? '*' : me.scope[0])) }
+  async function load() { setData(await (reviewer ? attribution.admin : attribution.policies)(me.scope.includes('*') ? '*' : me.scope[0])) }
   useEffect(() => { void run(load) }, [])
   async function submit(action: string, body: Record<string, unknown>) { if (await save(action, body)) { await run(load); return true } return false }
   return <Space orientation="vertical" size={20} className="full-width"><Alert type="info" showIcon title="扫码、领取与完成是不同事件" description="触点仅记录访问；领取锁定归因。申诉裁定保留原触点，不直接转移任何人的佣金数字。完成事件接口需可信来源适配器接入，当前不开放外部回传。" />

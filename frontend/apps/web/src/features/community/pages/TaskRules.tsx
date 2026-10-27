@@ -1,6 +1,7 @@
+import { tasks } from '../../tasks/api'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Collapse, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tabs, Typography } from 'antd'
-import { community, type TaskRules as Rules, type User, type VersionedTaskRule, type PriceRule, type TaskTemplate } from '../api'
+import { type TaskRules as Rules, type User, type VersionedTaskRule, type PriceRule, type TaskTemplate } from '../api'
 import type { Run, Save } from '../model'
 const required = [{ required: true, message: '请明确填写此项' }]
 const kinds = (values: string[]) => values.map(value => ({ value, label: value }))
@@ -13,7 +14,7 @@ export function TaskRules({ me, busy, pending, run, save }: { me: User; busy: bo
   const [review, setReview] = useState<{ kind: 'price' | 'template'; id: string; version: number; editor: string }>()
   const [reason, setReason] = useState('')
   const locked = busy || pending
-  async function load() { setData(await community.read<Rules>('task_rules')) }
+  async function load() { setData(await tasks.rules()) }
   useEffect(() => { void run(load) }, [])
   async function submit(action: string, body: Record<string, unknown>) { if (await save(action, body)) { await run(load); return true } return false }
   function open(kind: 'price' | 'template') { form.resetFields(); setEditor(kind) }

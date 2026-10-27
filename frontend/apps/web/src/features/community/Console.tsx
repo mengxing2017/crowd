@@ -1,3 +1,5 @@
+import { identity } from '../identity/api'
+import { governance } from '../governance/api'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BookOutlined, DashboardOutlined, FileProtectOutlined, LogoutOutlined, QrcodeOutlined, ReloadOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
 import { PageContainer, ProLayout } from '@ant-design/pro-components'
@@ -19,12 +21,12 @@ const icons = { taskRules: <FileProtectOutlined />, tasks: <SafetyCertificateOut
 interface Pending { action: string; body: Record<string, unknown>; key: string; owner: string }
 function currentSection(): Section { return sections.find(section => `#/${section.key}` === window.location.hash)?.key || 'welcome' }
 async function readStaffSession() {
-  const user = await community.read<User>('me')
+  const user = await identity.me()
   if (user.status !== 'active' || !user.roles.some(role => role !== 'user')) {
     setToken('')
     throw new Error('此账号未获有效管理后台岗位授权')
   }
-  const rules = user.roles.includes('rule_manager') ? await community.read<Rule[]>('rules') : []
+  const rules = user.roles.includes('rule_manager') ? await governance.rules() : []
   return { user, rules }
 }
 export function Console() {
@@ -65,8 +67,8 @@ export function Console() {
     } finally { locked.current = false; setBusy(false) }
   }
   async function refresh() {
-    const user = await community.read<User>('me')
-    const nextRules = user.roles.includes('rule_manager') ? await community.read<Rule[]>('rules') : []
+    const user = await identity.me()
+    const nextRules = user.roles.includes('rule_manager') ? await governance.rules() : []
     setMe(user); setRules(nextRules)
   }
   async function save(action: string, body: Record<string, unknown>) {

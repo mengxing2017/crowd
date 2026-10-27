@@ -1,7 +1,7 @@
+import { identity } from '../../identity/api'
 import { useState } from 'react'
 import { Alert, Button, Card, Descriptions, Form, Input, Select, Space, Tag, Tabs, Typography } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
-import { community } from '../api'
 import { roleNames, statuses, type Run, type Save } from '../model'
 interface ManagedUser { id: string; status: string; version: number; roles: string[]; scope: string[]; restrictions: { scope: string; reason: string; appeal: string }[] }
 export function UserManagement({ actorId, busy, pending, run, save }: { actorId: string; busy: boolean; pending: boolean; run: Run; save: Save }) {
@@ -12,8 +12,8 @@ export function UserManagement({ actorId, busy, pending, run, save }: { actorId:
   const [restrictionForm] = Form.useForm()
   async function load(id: string) {
     setUser(undefined)
-    const next = await community.read<ManagedUser>('users', id)
-    const verified = await community.read<{ version: number; region?: string; qualifications?: string[] }>('eligibility', id)
+    const next = await identity.users(id)
+    const verified = await identity.eligibility(id)
     setEligibility(verified); eligibilityForm.setFieldsValue({ region: verified.region, qualifications: verified.qualifications || [], reason: '' })
     setUser(next); accessForm.setFieldsValue({ roles: next.roles, scope: next.scope, reason: '' }); restrictionForm.resetFields()
   }

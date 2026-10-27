@@ -13,7 +13,7 @@ export default defineConfig({
   // Local file dependencies can retain stale pnpm copies and Vite prebundles.
   // Resolve the contract from its source for both development and production builds.
   resolve: { alias: [{ find: /^@crowd\/api-contract\/([^/]+)$/, replacement: `${contractRoot}/src/modules/$1/index.ts` }] },
-  optimizeDeps: { exclude: ['@crowd/api-contract/community', '@crowd/api-contract/system'] },
+  optimizeDeps: { exclude: ['system', 'community', 'common', 'identity', 'catalog', 'attribution', 'tasks', 'governance'].map(domain => `@crowd/api-contract/${domain}`) },
   server: { host: '127.0.0.1', port: 5173, strictPort: true,
     fs: { allow: [searchForWorkspaceRoot(process.cwd()), contractRoot] },
     proxy: Object.fromEntries(['/api', '/healthz', '/readyz'].map(path => [path, {

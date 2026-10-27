@@ -1,6 +1,7 @@
+import { catalog } from '../../catalog/api'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Collapse, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, Upload } from 'antd'
-import { community, uploadProductImage, type CatalogAdmin, type Product, type ProductContent, type ProductRelease, type User } from '../api'
+import { uploadProductImage, type CatalogAdmin, type Product, type ProductContent, type ProductRelease, type User } from '../api'
 import type { Run, Save } from '../model'
 const required = [{ required: true, message: '请填写此项' }]
 const timestamp = (value: string) => Math.floor(new Date(value).getTime() / 1000)
@@ -23,7 +24,7 @@ export function Catalog({ me, busy, pending, run, save }: { me: User; busy: bool
   const [reason, setReason] = useState('')
   const locked = busy || pending
   const edit = me.roles.includes('operator')
-  async function load() { setData(await community.read<CatalogAdmin>('catalog_admin')) }
+  async function load() { setData(await catalog.admin()) }
   useEffect(() => { void run(load) }, [])
   async function submit(action: string, body: Record<string, unknown>) { if (await save(action, body)) { await run(load); return true } return false }
   function editProduct(product: Product | 'new') {

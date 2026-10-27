@@ -1,8 +1,9 @@
+import { identity } from '../identity/api'
 import { useState } from 'react'
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
 import { LoginForm, ProFormText } from '@ant-design/pro-components'
 import { Alert, Form, Tabs, Typography } from 'antd'
-import { community, setToken, type Login } from './api'
+import { setToken, type Login } from './api'
 interface Credentials { username: string; password: string; ticket: string }
 export function AdminLogin({ onAuthenticated, initialError }: { onAuthenticated: (session: Login) => Promise<void>; initialError?: string }) {
   const [mode, setMode] = useState('password')
@@ -13,7 +14,7 @@ export function AdminLogin({ onAuthenticated, initialError }: { onAuthenticated:
     <LoginForm<Credentials> form={form} title="Crowd 运营管理" subTitle="让业务有据可依，让每一次协作都有记录" logo={<SafetyCertificateOutlined style={{ color: '#1677ff', fontSize: 36 }} />} initialValues={{ username: 'admin' }} submitter={{ searchConfig: { submitText: busy ? '正在登录…' : '登录' }, submitButtonProps: { 'aria-label': '登录', loading: busy, size: 'large', block: true } }} onFinish={async values => {
       if (busy) return false
       setBusy(true); setError('')
-      try { const session = mode === 'password' ? await community.adminLogin({ username: values.username, password: values.password }) : await community.redeem(values.ticket); await onAuthenticated(session); form.resetFields(['password', 'ticket']); return true }
+      try { const session = mode === 'password' ? await identity.adminLogin({ username: values.username, password: values.password }) : await identity.redeem(values.ticket); await onAuthenticated(session); form.resetFields(['password', 'ticket']); return true }
       catch (error) { setToken(''); setError(error instanceof Error ? error.message : '登录失败，请稍后重试'); return false }
       finally { setBusy(false) }
     }}>
