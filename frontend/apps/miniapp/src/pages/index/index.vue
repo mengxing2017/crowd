@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TaskCenter from '../../features/tasks/TaskCenter.vue'
 import { onMounted, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { BusinessError, type User, type Rule, type Promotion, type Receipt, type PublicCatalog, type PublicProduct, type Claim, type CatalogNotification } from '../../features/community/api'
@@ -8,6 +9,7 @@ const selected = ref<PublicProduct | null>(null)
 const selectedTask = ref('')
 const claimConfirmed = ref(false)
 const claims = ref<Claim[]>([])
+const taskRevision = ref(0)
 const notifications = ref<CatalogNotification[]>([])
 const touchTokens = ref<string[]>([])
 const keyword = ref('')
@@ -69,14 +71,17 @@ const imageOrigin = import.meta.env.VITE_API_ORIGIN || 'http://127.0.0.1:8080'
 
 onShow(() => { void run(loadCatalog) })
 onMounted(() => { void run(async () => { await loadCatalog(); agreement.value = await community.agreements() }) })
-async function run(work: () => Promise<void>) { busy.value = true; message.value = '处理中…'; try { await work(); message.value = '操作完成' } catch (e) { if (e instanceof BusinessError && e.detail.code === 'SESSION_EXPIRED') clearPrivate(); message.value = e instanceof Error ? e.message : '操作失败，请查询原结果' } finally { busy.value = false } }
+let runningCount = 0
+async function run(work: () => Promise<void>) { runningCount += 1; busy.value = true; message.value = '处理中…'; try { await work(); message.value = '操作完成' } catch (e) { if (e instanceof BusinessError && e.detail.code === 'SESSION_EXPIRED') clearPrivate(); message.value = e instanceof Error ? e.message : '操作失败，请查询原结果' } finally { runningCount -= 1; busy.value = runningCount > 0 } }
 async function refresh() {
   const user = await community.read<User>('me'); me.value = user; nickname.value = user.nickname
   attributionDisputes.value = (await community.read<{ disputes: { id: string; claim_id: string; status: string; decision_reason?: string }[] }>('my_attribution')).disputes
   claims.value = await community.read<Claim[]>('my_claims'); notifications.value = await community.read<CatalogNotification[]>('catalog_notifications')
+  taskRevision.value += 1
   codes.value = await community.read<Promotion[]>('codes'); cases.value = await community.read<{ id: string; kind: string; status: string }[]>('cases')
 }
 async function submit(action: string, body: Record<string, unknown>) {
+  if (pending.value) throw new Error('请先查询上次提交结果，或使用原请求重试')
   pending.value = { action, body, key: key(), owner: me.value?.id || '' }
   try { const value = await community.command(action, body, pending.value.key); pending.value = null; await refresh(); return value } catch (e) { if (e instanceof BusinessError && e.detail.code !== 'SERVICE_UNAVAILABLE') pending.value = null; throw e }
 }
@@ -125,11 +130,11 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
       <picker :range="['名称排序', '佣金从低到高', '佣金从高到低']" @change="sort = (['name', 'commission_asc', 'commission_desc'] as const)[Number($event.detail.value)]"><view>排序：{{ sort === 'name' ? '名称' : sort === 'commission_asc' ? '佣金升序' : '佣金降序' }}</view></picker>
       <view v-if="catalog"><button @click="categoryFilter = ''; run(loadCatalog)">全部分类</button><button v-for="c in catalog.categories" :key="c.id" @click="categoryFilter = c.id; run(loadCatalog)">{{ c.name }}</button></view>
       <button :disabled="busy" @click="run(loadCatalog)">搜索／刷新产品</button><text v-if="!catalog">目录尚未加载，可点击重试。</text><text v-else-if="catalog.products.length === 0">暂无符合条件的已发布产品。</text>
-      <view v-for="p in catalog?.products || []" :key="p.id" class="record"><text class="heading">{{ p.content.name }}</text><text>{{ p.content.summary }}</text><text v-for="t in p.content.tasks" :key="t.id">{{ t.name }} · 佣金标记 {{ cents(t.commission_cents) }} 元</text><button @click="openProduct(p)">查看条件与任务</button></view>
+      <view v-for="p in catalog?.products || []" :key="p.id" class="record"><text class="heading">{{ p.content.name }}</text><text>{{ p.content.summary }}</text><text v-for="t in p.content.tasks" :key="t.id">{{ t.name }} · {{ t.price_preview?.kind === 'proportional' && t.price_preview.cap_cents == null ? '按可信成果比例待核定' : `${t.price_preview?.kind === 'proportional' ? '佣金上限' : '佣金标记'} ${cents(t.commission_cents)} 元` }}</text><button @click="openProduct(p)">查看条件与任务</button></view>
     </view>
     <view v-if="selected" class="card"><text class="heading">{{ selected.content.name }}</text><image v-for="img in selected.content.images" :key="img.file_id" :src="`${imageOrigin}/api/v1/catalog/images/${encodeURIComponent(img.file_id)}`" mode="widthFix" @error="message = '图片暂不可用，请阅读文字说明'" /><text v-for="img in selected.content.images" :key="`alt-${img.file_id}`">{{ img.alt }}</text><text>{{ selected.content.details }}</text><text class="notice">关键限制：{{ selected.content.limitations }}</text><text>预计 {{ selected.content.estimated_minutes }} 分钟；适用地区：{{ selected.content.regions.join('、') || '不限' }}；资格：{{ selected.content.qualifications.join('、') || '不限' }}</text>
-      <radio-group @change="selectedTask = $event.detail.value; claimConfirmed = false"><label v-for="t in selected.content.tasks" :key="t.id"><radio :value="t.id" :checked="selectedTask === t.id" />{{ t.name }} · {{ cents(t.commission_cents) }} 元</label></radio-group>
-      <view v-for="t in selected.content.tasks.filter(t => t.id === selectedTask)" :key="t.id"><text>完成条件：{{ t.completion }}；证据：{{ t.evidence }}；时限：{{ t.submit_seconds }} 秒；{{ t.allow_self ? '允许自推' : '不允许本人自推' }}</text><text>佣金为标记数字，后续审核与人工线下结算不代表自动到账。</text></view>
+      <radio-group @change="selectedTask = $event.detail.value; claimConfirmed = false"><label v-for="t in selected.content.tasks" :key="t.id"><radio :value="t.id" :checked="selectedTask === t.id" />{{ t.name }} · {{ t.price_preview?.kind === 'proportional' && t.price_preview.cap_cents == null ? '按比例待核定' : `${t.price_preview?.kind === 'proportional' ? '上限' : '固定'} ${cents(t.commission_cents)} 元` }}</label></radio-group>
+      <view v-for="t in selected.content.tasks.filter(t => t.id === selectedTask)" :key="t.id"><text>完成条件：{{ t.completion }}；证据：{{ t.evidence }}；时限：{{ t.submit_seconds }} 秒；{{ t.allow_self ? '允许自推' : '不允许本人自推' }}</text><text v-if="t.template_preview">步骤：{{ t.template_preview.steps.map(s => s.title).join(' → ') }}；失败条件：{{ t.template_preview.failure_conditions }}；审核目标：{{ t.template_preview.review_goal }}；{{ t.template_preview.double_review ? '须独立双人复核' : '人工审核' }}</text><text v-if="t.price_preview?.kind === 'proportional'">{{ t.price_preview.cap_cents == null ? '数字待核定，不显示保证佣金；' : '所示数字为单笔上限；' }}比例 {{ t.price_preview.numerator }}/{{ t.price_preview.denominator }}，{{ t.price_preview.rounding }} 舍入，实际由可信成果基数计算。</text><text>佣金为标记数字，后续审核与人工线下结算不代表自动到账。</text></view>
       <checkbox-group @change="claimConfirmed = $event.detail.value.includes('claim')"><label><checkbox value="claim" :checked="claimConfirmed" />确认当前任务条件、限制和佣金数字</label></checkbox-group><button :disabled="busy || !!pending || !me || !claimConfirmed || !selected.available_tasks.includes(selectedTask)" @click="run(claimTask)">{{ me ? '确认领取并固定快照' : '请先登录后领取' }}</button><button @click="selected = null">返回产品列表</button>
     </view>
     <view v-if="!me" class="card">
@@ -141,7 +146,8 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
       <button :disabled="busy" @click="run(async () => { agreement = await community.agreements() })">重新加载协议</button>
     </view>
     <template v-else>
-      <view class="card"><text class="heading">已领取任务与历史快照</text><text v-if="claims.length === 0">暂无领取记录；扫码不会占用名额。</text><view v-for="c in claims" :key="c.id" class="record"><text>{{ c.product.name }} · {{ c.task.name }} · {{ cents(c.task.commission_cents) }} 元（标记数字）</text><text>实例：{{ c.id }}；条件：{{ c.task.completion }}；限制：{{ c.product.limitations }}；原分类：{{ c.category.name }}</text><text>提交期限：{{ new Date(c.submit_until * 1000).toLocaleString() }}；已固定领取时规则与推广归属</text><button @click="disputeClaim = c.id">申诉此任务归因</button></view><text>本期完成领取与快照；任务提交、成果审核及佣金确认由后续模块接入。</text><input v-model="disputeClaim" placeholder="申诉任务实例编号" /><input v-model="disputeReason" placeholder="申诉理由" /><input v-model="disputeEvidence" placeholder="触点证据说明" /><button :disabled="busy || !!pending || !disputeClaim || !disputeReason || !disputeEvidence" @click="run(async () => { await submit('attribution_dispute', { claim_id: disputeClaim, reason: disputeReason, evidence: disputeEvidence }) })">提交归因申诉（不直接改数字）</button><view v-for="d in attributionDisputes" :key="d.id"><text>申诉 {{ d.claim_id }}：{{ d.status === 'pending' ? '待人工裁定' : d.status === 'uphold' ? '维持原归属' : '待关联数字调整核查' }} {{ d.decision_reason }}</text></view></view>
+      <TaskCenter :key="me.id" :busy="busy" :pending="!!pending" :revision="taskRevision" :submit="submit" :run="run" />
+      <view class="card"><text class="heading">已领取任务与历史快照</text><text v-if="claims.length === 0">暂无领取记录；扫码不会占用名额。</text><view v-for="c in claims" :key="c.id" class="record"><text>{{ c.product.name }} · {{ c.task.name }} · {{ c.task.price_preview?.kind === 'proportional' && c.task.price_preview.cap_cents == null ? '按比例待核定' : `${cents(c.task.commission_cents)} 元（${c.task.price_preview?.kind === 'proportional' ? '单笔上限' : '标记数字'}）` }}</text><text>实例：{{ c.id }}；条件：{{ c.task.completion }}；限制：{{ c.product.limitations }}；原分类：{{ c.category.name }}</text><text>提交期限：{{ new Date(c.submit_until * 1000).toLocaleString() }}；已固定领取时规则与推广归属</text><button @click="disputeClaim = c.id">申诉此任务归因</button></view><text>新版任务可在下方“我的任务执行与提交”处理；旧版领取快照不变。</text><input v-model="disputeClaim" placeholder="申诉任务实例编号" /><input v-model="disputeReason" placeholder="申诉理由" /><input v-model="disputeEvidence" placeholder="触点证据说明" /><button :disabled="busy || !!pending || !disputeClaim || !disputeReason || !disputeEvidence" @click="run(async () => { await submit('attribution_dispute', { claim_id: disputeClaim, reason: disputeReason, evidence: disputeEvidence }) })">提交归因申诉（不直接改数字）</button><view v-for="d in attributionDisputes" :key="d.id"><text>申诉 {{ d.claim_id }}：{{ d.status === 'pending' ? '待人工裁定' : d.status === 'uphold' ? '维持原归属' : '待关联数字调整核查' }} {{ d.decision_reason }}</text></view></view>
       <view v-if="notifications.length" class="card"><text class="heading">产品状态通知</text><text v-for="(n, i) in notifications" :key="i">{{ n.product_id }} · {{ n.kind === 'product_offline' ? '已下架，存量按快照继续' : n.kind === 'product_archive' ? '已归档，历史记录保留' : n.kind === 'scheduled_live' ? '定时发布已生效' : n.kind === 'expired_or_unavailable' ? '已到期或不可用，存量按快照继续' : '发布审核状态已更新' }}</text></view>
       <view class="card">
         <text class="heading">{{ me.nickname }} · {{ me.status }}</text><text>用户编号：{{ me.id }}</text>
