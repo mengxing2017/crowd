@@ -14,15 +14,20 @@ impl Service {
         let now = Repository::epoch(&mut tx).await?;
         let revision = state.catalog.revision;
         state.reconcile_lifecycle(now);
-        if revision != state.catalog.revision {
+        let expired = state.expire_tasks(now);
+        if revision != state.catalog.revision || expired > 0 {
             let time = Repository::time(&mut tx).await?;
             state.log(
                 "catalog-worker",
-                "REQ-07-004+REQ-07-009+REQ-07-010",
+                "REQ-07-004+REQ-07-009+REQ-07-010+REQ-10-007+REQ-12-007",
                 "platform",
                 "lifecycle-worker",
                 &time,
             );
+            if let Some(audit) = state.audit.last_mut() {
+                audit["rule_version"] = json!("M05-M12-v1");
+                audit["expired_tasks"] = json!(expired);
+            }
             Repository::save(&mut tx, &state).await?;
         }
         Repository::commit(tx).await

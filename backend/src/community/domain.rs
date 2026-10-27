@@ -17,6 +17,8 @@ pub fn text<'a>(v: &'a Value, field: &str) -> Result<&'a str> {
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct State {
     #[serde(default)]
+    pub tasks: crate::tasks::domain::Tasks,
+    #[serde(default)]
     pub catalog: crate::catalog::domain::Catalog,
     pub users: BTreeMap<String, User>,
     pub rules: Vec<Value>,
@@ -223,6 +225,9 @@ impl State {
         }.inspect(|_| { self.log(actor,section,target,request,time); })
     }
     pub fn check_command_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
+        if crate::tasks::domain::is_command(action) {
+            return self.tasks_access(actor, action, input);
+        }
         if crate::catalog::domain::is_command(action) {
             return self.catalog_access(actor, action, input);
         }

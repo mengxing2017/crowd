@@ -237,7 +237,11 @@ impl State {
                     .iter()
                     .filter(|t| {
                         let cents = t["commission_cents"].as_i64().unwrap_or(0);
-                        minimum <= cents
+                        let unknown = t["price_preview"]["kind"] == "proportional"
+                            && t["price_preview"]["cap_cents"].is_null();
+                        !(unknown
+                            && (!query["min_cents"].is_null() || !query["max_cents"].is_null()))
+                            && minimum <= cents
                             && cents <= maximum
                             && (query["task_status"].as_str().is_none_or(|s| {
                                 (s == "available") == self.task_available(id, t, now)
@@ -356,17 +360,32 @@ impl State {
             .catalog
             .claims
             .values()
-            .filter(|c| c["product_id"] == product && c["task"]["id"] == task["id"])
+            .filter(|c| {
+                c["product_id"] == product
+                    && c["task"]["id"] == task["id"]
+                    && c["reservation_released"] != true
+            })
             .count() as i64;
         let used = self
             .catalog
             .claims
             .values()
-            .filter(|c| c["product_id"] == product && c["task"]["id"] == task["id"])
+            .filter(|c| {
+                c["product_id"] == product
+                    && c["task"]["id"] == task["id"]
+                    && c["reservation_released"] != true
+            })
             .try_fold(0i64, |acc, c| {
                 acc.checked_add(c["task"]["commission_cents"].as_i64().unwrap_or(0))
             });
-        task["rule_starts_at"].as_i64().is_some_and(|t| t <= now)
+        task["template_id"].as_str().is_none_or(|id| {
+            self.tasks.templates.get(id).is_some_and(|v| {
+                v["status"] == "approved"
+                    && v["content"]["claim_until"]
+                        .as_i64()
+                        .is_some_and(|end| now < end)
+            })
+        }) && task["rule_starts_at"].as_i64().is_some_and(|t| t <= now)
             && task["rule_ends_at"].as_i64().is_some_and(|t| now < t)
             && task["capacity"].as_i64().is_none_or(|n| count < n)
             && task["digital_limit_cents"].as_i64().is_none_or(|n| {
@@ -589,7 +608,7 @@ impl State {
                 json!({"id":id,"version":version(p),"status":"draft","notice":"回滚创建草稿，须重新校验并独立审核发布"})
             }
             "product_submit" => {
-                let p = self.catalog.products.get(&id).cloned().ok_or(not_found())?;
+                let mut p = self.catalog.products.get(&id).cloned().ok_or(not_found())?;
                 check_version(version(&p), input)?;
                 if p["archived"] == true
                     || p["releases"]
@@ -606,7 +625,8 @@ impl State {
                 if start >= end || end <= now {
                     return Err(invalid("发布有效期无效"));
                 }
-                for task in p["draft"]["tasks"].as_array().unwrap() {
+                for task in p["draft"]["tasks"].as_array_mut().unwrap() {
+                    self.validate_task_reference(task, start, end)?;
                     if num(task, "rule_starts_at")? > start || num(task, "rule_ends_at")? < end {
                         return Err(invalid("佣金规则有效期必须覆盖发布有效期"));
                     }
@@ -752,11 +772,14 @@ impl State {
                     .find(|t| t["id"] == input["task_id"])
                     .cloned()
                     .ok_or(not_found())?;
-                if self.catalog.claims.values().any(|c| {
-                    c["owner"] == actor
-                        && c["release_id"] == r["id"]
-                        && c["task"]["id"] == task["id"]
-                }) {
+                let execution_snapshot = self.task_snapshot(actor, &task, now)?;
+                if execution_snapshot.is_none()
+                    && self.catalog.claims.values().any(|c| {
+                        c["owner"] == actor
+                            && c["release_id"] == r["id"]
+                            && c["task"]["id"] == task["id"]
+                    })
+                {
                     return Err(Failure(
                         "ALREADY_CLAIMED",
                         "本发布版本的任务已领取，请查询原记录",
@@ -804,6 +827,7 @@ impl State {
                     .cloned()
                     .unwrap();
                 let claim = json!({"id":generated,"owner":actor,"product_id":id,"release_id":r["id"],"product":r["content"],"category":public_category(&category),"task":task,"policy":policy,"touch":touch,"locked_at":now,"submit_until":now.checked_add(num(&task,"submit_seconds")?).ok_or(invalid("时限超出范围"))?,"status":"claimed","notice":"领取仅固定条件和归因，不生成可申请佣金"});
+                self.attach_task(&claim, execution_snapshot, now)?;
                 self.catalog.claims.insert(generated.into(), claim.clone());
                 claim
             }

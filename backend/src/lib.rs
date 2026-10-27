@@ -2,6 +2,7 @@ pub mod catalog;
 pub mod community;
 pub mod runtime;
 pub mod system;
+pub mod tasks;
 use axum::{Router, routing::get};
 use sqlx::PgPool;
 use system::{

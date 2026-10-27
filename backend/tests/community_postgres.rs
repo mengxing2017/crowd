@@ -4,6 +4,8 @@ use crowd_api::community::{
 };
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
+#[path = "support/tasks.rs"]
+mod task_support;
 struct TrustedFixture;
 impl IdentityProvider for TrustedFixture {
     async fn exchange(&self, code: &str) -> Result<String, ()> {
@@ -301,6 +303,14 @@ async fn postgres_registration_sessions_files_and_concurrent_commands() {
     )
     .await
     .unwrap();
+    tasks_flow(
+        &service,
+        web_token,
+        bob,
+        uid,
+        b["user_id"].as_str().unwrap(),
+    )
+    .await;
     sqlx::query("UPDATE crowd_sessions SET expires_at=now()-interval '1 second'")
         .execute(&pool)
         .await
@@ -713,4 +723,309 @@ async fn catalog_flow(
     assert!(state.catalog.completions.is_empty());
     assert!(state.audit.iter().any(|a| a["action"] == "task_claim"));
     Ok(())
+}
+
+async fn tasks_flow(service: &Service, alice: &str, bob: &str, alice_id: &str, bob_id: &str) {
+    let mut tx = service.repo.begin().await.unwrap();
+    let mut s = Repository::load(&mut tx).await.unwrap();
+    let now = Repository::epoch(&mut tx).await.unwrap();
+    s.users
+        .get_mut(bob_id)
+        .unwrap()
+        .roles
+        .extend(["verifier".into(), "task_reviewer".into()]);
+    s.users
+        .get_mut(alice_id)
+        .unwrap()
+        .roles
+        .extend(["task_reviewer".into(), "verifier".into()]);
+    task_support::seed(&mut s, alice_id, bob_id, now);
+    // A separate participant makes both reviewer identities independent from the task owner.
+    s.register_user("task-user", json!({"version":"test-agreement"}), None);
+    let user_token = Repository::entropy(&mut tx).await.unwrap();
+    sqlx::query("INSERT INTO crowd_sessions VALUES(encode(digest($1,'sha256'),'hex'),'task-user',now()+interval '1 hour')").bind(&user_token).execute(&mut *tx).await.unwrap();
+    s.catalog.categories.insert(
+        "task-cat".into(),
+        json!({"id":"task-cat","version":1,"name":"任务分类","enabled":true,"sort":1}),
+    );
+    let task = json!({"id":"task","name":"完成业务操作","version":1,"completion":"按步骤提供真实说明","evidence":"按表单提交","rule_version":"price","commission_cents":101,"currency":"CNY","rule_starts_at":now-100,"rule_ends_at":now+10000,"allow_self":false,"submit_seconds":2000,"capacity":1,"digital_limit_cents":101,"template_id":"template","price_id":"price"});
+    let content = json!({"name":"新版任务产品","category":"task-cat","summary":"简介","details":"操作说明","limitations":"按模板审核","estimated_minutes":5,"regions":[],"qualifications":[],"images":[{"file_id":"fixture","alt":"说明"}],"tasks":[task]});
+    s.catalog.products.insert("tasks-product".into(),json!({"id":"tasks-product","version":3,"draft":content,"editor":alice_id,"archived":false,"offline":false,"releases":[{"id":"tasks-release","status":"approved","starts_at":now-10,"ends_at":now+4000,"content":content,"editor":alice_id,"submitted_by":alice_id,"reviewer":bob_id}]}));
+    Repository::save(&mut tx, &s).await.unwrap();
+    Repository::commit(tx).await.unwrap();
+    let claim_body = json!({"id":"tasks-product","task_id":"task","release_id":"tasks-release","confirmed":true});
+    let (a, b) = tokio::join!(
+        service.command(
+            &user_token,
+            "task_claim",
+            &claim_body,
+            "tasks-claim",
+            "test"
+        ),
+        service.command(
+            &user_token,
+            "task_claim",
+            &claim_body,
+            "tasks-claim",
+            "test"
+        )
+    );
+    let claim = a.unwrap();
+    assert_eq!(claim, b.unwrap());
+    let id = claim["id"].as_str().unwrap();
+    assert!(
+        service
+            .command(alice, "task_claim", &claim_body, "tasks-quota", "test")
+            .await
+            .is_err()
+    );
+    let t = service
+        .command(
+            &user_token,
+            "task_start",
+            &json!({"id":id,"version":1}),
+            "tasks-start",
+            "test",
+        )
+        .await
+        .unwrap();
+    let t = service
+        .command(
+            &user_token,
+            "task_step",
+            &json!({"id":id,"version":t["version"],"step_id":"one"}),
+            "tasks-step-one",
+            "test",
+        )
+        .await
+        .unwrap();
+    let t = service
+        .command(
+            &user_token,
+            "task_step",
+            &json!({"id":id,"version":t["version"],"step_id":"two"}),
+            "tasks-step-two",
+            "test",
+        )
+        .await
+        .unwrap();
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 2)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    assert!(
+        service
+            .upload(
+                &user_token,
+                &format!("task_evidence:{id}"),
+                b"fake-png".to_vec(),
+                "fake"
+            )
+            .await
+            .is_err()
+    );
+    let attachment = service
+        .upload(
+            &user_token,
+            &format!("task_evidence:{id}"),
+            png.into_inner(),
+            "upload-proof",
+        )
+        .await
+        .unwrap();
+    let file_id = attachment["id"].as_str().unwrap();
+    assert!(service.file(alice, file_id, "no-owner").await.is_err());
+    assert!(
+        service
+            .evidence_file(alice, file_id, "未提交草稿不能查看", "private-draft")
+            .await
+            .is_err()
+    );
+    let (_, bytes) = service
+        .file(&user_token, file_id, "own-upload")
+        .await
+        .unwrap();
+    let t = service
+        .command(
+            &user_token,
+            "evidence_discard",
+            &json!({"id":id,"version":t["version"]}),
+            "tasks-cleanup",
+            "test",
+        )
+        .await
+        .unwrap();
+    assert!(service.file(&user_token, file_id, "cleaned").await.is_err());
+    let attachment = service
+        .upload(
+            &user_token,
+            &format!("task_evidence:{id}"),
+            bytes,
+            "upload-proof-again",
+        )
+        .await
+        .unwrap();
+    let file_id = attachment["id"].as_str().unwrap();
+    let t=service.command(&user_token,"evidence_save",&json!({"id":id,"version":t["version"],"evidence":{"fields":{"description":"业务操作真实完成","order":"CASE-01","photo":[file_id]},"occurred_at":t["started_at"]}}),"tasks-draft","test").await.unwrap();
+    let p = service
+        .command(
+            &user_token,
+            "evidence_preview",
+            &json!({"id":id,"version":t["version"]}),
+            "tasks-preview",
+            "test",
+        )
+        .await
+        .unwrap();
+    let submit =
+        json!({"id":id,"version":p["version"],"preview_id":p["preview"]["id"],"confirmed":true});
+    let (a, b) = tokio::join!(
+        service.command(
+            &user_token,
+            "evidence_submit",
+            &submit,
+            "tasks-submit",
+            "test"
+        ),
+        service.command(
+            &user_token,
+            "evidence_submit",
+            &submit,
+            "tasks-submit",
+            "test"
+        )
+    );
+    let t = a.unwrap();
+    assert_eq!(t, b.unwrap());
+    assert_eq!(t["submissions"].as_array().unwrap().len(), 1);
+    assert!(
+        service
+            .evidence_file(alice, file_id, "已授权独立复核", "view-proof")
+            .await
+            .is_ok()
+    );
+    let acquire = json!({"id":id,"version":t["version"]});
+    let (a, b) = tokio::join!(
+        service.command(alice, "review_claim", &acquire, "tasks-review-a", "test"),
+        service.command(bob, "review_claim", &acquire, "tasks-review-b", "test")
+    );
+    assert_ne!(a.is_ok(), b.is_ok());
+    let (reviewer, t) = if let Ok(t) = a {
+        (alice, t)
+    } else {
+        (bob, b.unwrap())
+    };
+    assert!(t["draft"].is_null());
+    assert!(t["receipt"]["evidence"].is_null());
+    let decision = json!({"id":id,"version":t["version"],"decision":"approve","reason":"逐项核对完成","checklist_confirmed":true});
+    let (a, b) = tokio::join!(
+        service.command(
+            reviewer,
+            "review_decide",
+            &decision,
+            "tasks-approve",
+            "test"
+        ),
+        service.command(
+            reviewer,
+            "review_decide",
+            &decision,
+            "tasks-approve",
+            "test"
+        )
+    );
+    assert_eq!(a.unwrap(), b.unwrap());
+    let detail = service
+        .read(&user_token, "task_detail", Some(id), "receipt-after-reopen")
+        .await
+        .unwrap();
+    assert_eq!(detail["status"], "approved");
+    let mut tx = service.repo.begin().await.unwrap();
+    let state = Repository::load(&mut tx).await.unwrap();
+    assert_eq!(state.tasks.confirmations.len(), 1);
+    assert_eq!(state.tasks.changes.len(), 1);
+    assert_eq!(
+        state.tasks.confirmations[id]["calculation"]["amount_cents"],
+        101
+    );
+    assert_eq!(state.tasks.confirmations[id]["withdrawable"], false);
+    assert!(
+        state
+            .audit
+            .iter()
+            .any(|a| a["action"] == "review_decide" && a["rule_version"] == "M08-M12-v1")
+    );
+    drop(tx);
+    let mut tx = service.repo.begin().await.unwrap();
+    let mut state = Repository::load(&mut tx).await.unwrap();
+    task_support::instance(&mut state, "withdraw-race", "task-user", now);
+    let completed = state.tasks.instances[id].clone();
+    let race = state.tasks.instances.get_mut("withdraw-race").unwrap();
+    for field in ["receipt", "submissions", "steps", "draft", "submitted_at"] {
+        race[field] = completed[field].clone();
+    }
+    race["status"] = json!("submitted");
+    Repository::save(&mut tx, &state).await.unwrap();
+    Repository::commit(tx).await.unwrap();
+    let withdraw = json!({"id":"withdraw-race","version":1,"reason":"用户改正证据"});
+    let acquire = json!({"id":"withdraw-race","version":1});
+    let (withdrawn, claimed) = tokio::join!(
+        service.command(
+            &user_token,
+            "evidence_withdraw",
+            &withdraw,
+            "withdraw-race",
+            "test"
+        ),
+        service.command(alice, "review_claim", &acquire, "claim-race", "test")
+    );
+    assert_ne!(withdrawn.is_ok(), claimed.is_ok());
+    let t = service
+        .read(
+            &user_token,
+            "task_detail",
+            Some("withdraw-race"),
+            "race-result",
+        )
+        .await
+        .unwrap();
+    assert!(t["status"] == "in_progress" || t["status"] == "reviewing");
+    // Fault injection: the second selected queue entry already has a confirmation after recovery.
+    // The first entry must not remain approved when this later business check fails.
+    let mut tx = service.repo.begin().await.unwrap();
+    let mut state = Repository::load(&mut tx).await.unwrap();
+    let original = state.tasks.instances[id].clone();
+    for key in ["batch-a", "batch-b"] {
+        let mut task = original.clone();
+        task["id"] = json!(key);
+        task["version"] = json!(1);
+        task["status"] = json!("reviewing");
+        task["reviewer"] = json!(alice_id);
+        state.tasks.instances.insert(key.into(), task);
+    }
+    let prior_confirmation = state.tasks.confirmations[id].clone();
+    state
+        .tasks
+        .confirmations
+        .insert("batch-b".into(), prior_confirmation);
+    let change_count = state.tasks.changes.len();
+    Repository::save(&mut tx, &state).await.unwrap();
+    Repository::commit(tx).await.unwrap();
+    let entries = json!([{"id":"batch-a","version":1},{"id":"batch-b","version":1}]);
+    let preview = service
+        .command(
+            alice,
+            "review_batch_preview",
+            &json!({"entries":entries}),
+            "batch-fault-preview",
+            "test",
+        )
+        .await
+        .unwrap();
+    assert!(service.command(alice,"review_batch",&json!({"entries":entries,"preview_id":preview["id"],"confirmed":true,"reason":"批量故障恢复测试"}),"batch-fault-commit","test").await.is_err());
+    let mut tx = service.repo.begin().await.unwrap();
+    let state = Repository::load(&mut tx).await.unwrap();
+    assert_eq!(state.tasks.instances["batch-a"]["status"], "reviewing");
+    assert!(!state.tasks.confirmations.contains_key("batch-a"));
+    assert_eq!(state.tasks.changes.len(), change_count);
 }

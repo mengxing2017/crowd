@@ -165,13 +165,29 @@ async fn upload(
     };
     response(result, &r)
 }
+#[derive(Deserialize, Default)]
+struct FileQuery {
+    reason: Option<String>,
+}
 async fn file(
     State(app): State<Application>,
     Path(id): Path<String>,
     headers: HeaderMap,
+    query: Result<Query<FileQuery>, axum::extract::rejection::QueryRejection>,
 ) -> Response {
     let r = request_id();
-    match app.community.file(token(&headers), &id, &r).await {
+    let query = match query {
+        Ok(Query(query)) => query,
+        Err(_) => return response(Err(Failure("INVALID_INPUT", "图片查看用途参数无效")), &r),
+    };
+    let result = if let Some(reason) = query.reason {
+        app.community
+            .evidence_file(token(&headers), &id, &reason, &r)
+            .await
+    } else {
+        app.community.file(token(&headers), &id, &r).await
+    };
+    match result {
         Ok((mime, bytes)) => (
             [
                 ("content-type", mime),

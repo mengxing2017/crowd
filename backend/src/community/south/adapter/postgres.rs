@@ -275,7 +275,7 @@ impl Repository {
         purpose: &str,
         bytes: Vec<u8>,
     ) -> Result<Value> {
-        if !["avatar", "wechat_receipt", "product_image"].contains(&purpose) {
+        if !["avatar", "wechat_receipt", "product_image", "task_evidence"].contains(&purpose) {
             return Err(invalid("文件用途无效"));
         }
         // Engineering resource ceiling, not a confirmed business image policy.
@@ -313,5 +313,20 @@ impl Repository {
             .await
             .map_err(database)?
             .ok_or(Failure("FORBIDDEN", "无权查看文件"))
+    }
+    pub async fn delete_unused_evidence(
+        tx: &mut Transaction<'_, Postgres>,
+        id: &str,
+        owner: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "DELETE FROM crowd_files WHERE id=$1 AND owner_id=$2 AND purpose='task_evidence'",
+        )
+        .bind(id)
+        .bind(owner)
+        .execute(&mut **tx)
+        .await
+        .map_err(database)?;
+        Ok(())
     }
 }

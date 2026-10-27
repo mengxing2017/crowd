@@ -59,7 +59,13 @@ impl Service {
         let mut state = Repository::load(&mut tx).await?;
         let now = Repository::time(&mut tx).await?;
         let epoch = Repository::epoch(&mut tx).await?;
-        let result = if crate::catalog::domain::is_read(section) {
+        let result = if crate::tasks::domain::is_read(section) {
+            let result = state.tasks_read(&actor, section, target.unwrap_or(&actor), epoch);
+            if result.is_ok() {
+                state.log(&actor, section, target.unwrap_or(&actor), request, &now);
+            }
+            result
+        } else if crate::catalog::domain::is_read(section) {
             let result = state.catalog_read(&actor, section, target.unwrap_or(&actor), epoch);
             if result.is_ok() {
                 state.log(&actor, section, target.unwrap_or(&actor), request, &now);
@@ -112,7 +118,23 @@ impl Service {
             if previous["action"] != action || previous["input"] != *input {
                 return Err(Failure("IDEMPOTENCY_CONFLICT", "同一请求键内容不同"));
             }
-            return Ok(previous["result"].clone());
+            let result = previous["result"].clone();
+            if action == "evidence_reveal" {
+                let now = Repository::time(&mut tx).await?;
+                state.log(
+                    &actor,
+                    "evidence_reveal",
+                    input["id"].as_str().unwrap_or(""),
+                    request,
+                    &now,
+                );
+                if let Some(log) = state.audit.last_mut() {
+                    log["reason"] = input["reason"].clone();
+                }
+                Repository::save(&mut tx, &state).await?;
+                Repository::commit(tx).await?;
+            }
+            return Ok(result);
         }
         if action == "profile"
             && let Some(id) = input["avatar"].as_str()
@@ -130,8 +152,16 @@ impl Service {
         }
         Self::validate_catalog_files(&mut tx, &state, &actor, action, input).await?;
         let epoch = Repository::epoch(&mut tx).await?;
+        let expired = state.expire_tasks(epoch);
         let generated = Repository::entropy(&mut tx).await?;
         let now = Repository::time(&mut tx).await?;
+        if expired > 0 {
+            state.log("task-worker", "task_expire", "platform", request, &now);
+            if let Some(audit) = state.audit.last_mut() {
+                audit["rule_version"] = json!("M08-M12-v1");
+                audit["expired_tasks"] = json!(expired);
+            }
+        }
         let before = state.clone();
         let result = async {
             Ok::<Value, Failure>(if action == "logout" {
@@ -151,6 +181,57 @@ impl Service {
                     .ok_or(Failure("NOT_FOUND", "资料不存在"))?;
                 state.log(&actor, "REQ-03-008", id, request, &now);
                 receipt
+            } else if crate::tasks::domain::is_command(action) {
+                let result = state.tasks_command(&actor, action, input, &generated, epoch)?;
+                if action == "evidence_discard" {
+                    let id = crate::community::domain::text(input, "id")?;
+                    let task = state
+                        .tasks
+                        .instances
+                        .get(id)
+                        .ok_or(Failure("NOT_FOUND", "任务不存在"))?;
+                    let unused: Vec<String> = state
+                        .tasks
+                        .attachments
+                        .iter()
+                        .filter(|(file, a)| {
+                            a["task_id"] == id
+                                && a["owner"] == actor
+                                && !task["submissions"].as_array().is_some_and(|submissions| {
+                                    submissions.iter().any(|submission| {
+                                        submission["evidence"]["fields"].as_object().is_some_and(
+                                            |fields| {
+                                                fields.values().any(|value| {
+                                                    value.as_array().is_some_and(|files| {
+                                                        files.iter().any(|v| v == file.as_str())
+                                                    })
+                                                })
+                                            },
+                                        )
+                                    })
+                                })
+                        })
+                        .map(|(file, _)| file.clone())
+                        .collect();
+                    for file in unused {
+                        Repository::delete_unused_evidence(&mut tx, &file, &actor).await?;
+                        state.tasks.attachments.remove(&file);
+                    }
+                }
+                state.log(
+                    &actor,
+                    action,
+                    input["id"].as_str().unwrap_or(&actor),
+                    request,
+                    &now,
+                );
+                if let Some(audit) = state.audit.last_mut() {
+                    audit["rule_version"] = json!("M08-M12-v1");
+                    audit["reason"] = input["reason"].clone();
+                    audit["object_version"] = input["version"].clone();
+                    audit["result_ref"] = result["id"].clone();
+                }
+                result
             } else if crate::catalog::domain::is_command(action) {
                 let result = state.catalog_command(&actor, action, input, &generated, epoch)?;
                 state.log(
@@ -242,7 +323,54 @@ impl Service {
         if purpose == "product_image" {
             state.authorize(&actor, "operator", "platform")?;
         }
-        let result = Repository::upload(&mut tx, &actor, purpose, bytes).await?;
+        let task_id = purpose.strip_prefix("task_evidence:");
+        let size = bytes.len();
+        if let Some(id) = task_id {
+            let t = state
+                .tasks
+                .instances
+                .get(id)
+                .ok_or(Failure("NOT_FOUND", "任务不存在"))?;
+            if t["owner"] != actor
+                || !matches!(t["status"].as_str(), Some("in_progress" | "supplement"))
+            {
+                return Err(Failure("FORBIDDEN", "不能向该任务上传证据"));
+            }
+            if size > t["template"]["max_file_bytes"].as_u64().unwrap_or(0) as usize {
+                return Err(Failure("INVALID_INPUT", "证据图片超过模板大小限制"));
+            }
+            let count = state
+                .tasks
+                .attachments
+                .values()
+                .filter(|a| a["task_id"] == id)
+                .count();
+            if count >= 100 {
+                return Err(Failure(
+                    "INVALID_INPUT",
+                    "当前任务上传文件已达服务资源上限，请联系客服",
+                ));
+            }
+        } else if purpose == "task_evidence" {
+            return Err(Failure("INVALID_INPUT", "证据上传必须绑定任务"));
+        }
+        let result = Repository::upload(
+            &mut tx,
+            &actor,
+            if task_id.is_some() {
+                "task_evidence"
+            } else {
+                purpose
+            },
+            bytes,
+        )
+        .await?;
+        if let Some(id) = task_id {
+            state.tasks.attachments.insert(
+                result["id"].as_str().unwrap().into(),
+                json!({"task_id":id,"owner":actor,"size":size}),
+            );
+        }
         let now = Repository::time(&mut tx).await?;
         state.log(
             &actor,
@@ -259,10 +387,73 @@ impl Service {
         let mut tx = self.repo.begin().await?;
         let actor = Repository::authenticate(&mut tx, token).await?;
         let mut state = Repository::load(&mut tx).await?;
-        state.user(&actor)?;
+        if state.user(&actor)?.status != "active" {
+            return Err(Failure("FORBIDDEN", "账号不可查看私有资料"));
+        }
         let result = Repository::file(&mut tx, id, &actor).await?;
         let now = Repository::time(&mut tx).await?;
         state.log(&actor, "file_view", id, request, &now);
+        Repository::save(&mut tx, &state).await?;
+        Repository::commit(tx).await?;
+        Ok(result)
+    }
+    pub async fn evidence_file(
+        &self,
+        token: &str,
+        id: &str,
+        reason: &str,
+        request: &str,
+    ) -> Result<(String, Vec<u8>)> {
+        let mut tx = self.repo.begin().await?;
+        let actor = Repository::authenticate(&mut tx, token).await?;
+        let mut state = Repository::load(&mut tx).await?;
+        crate::community::domain::text(&json!({"reason":reason}), "reason")?;
+        let a = state
+            .tasks
+            .attachments
+            .get(id)
+            .ok_or(Failure("NOT_FOUND", "证据图片不存在"))?;
+        let t = state
+            .tasks
+            .instances
+            .get(a["task_id"].as_str().unwrap_or(""))
+            .ok_or(Failure("NOT_FOUND", "任务不存在"))?;
+        if state.user(&actor)?.status != "active" {
+            return Err(Failure("FORBIDDEN", "账号不可查看证据"));
+        }
+        if a["owner"] != actor {
+            let target = t["product_id"].as_str().unwrap_or("");
+            let reviewer = state.authorize(&actor, "task_reviewer", target).is_ok()
+                && t["reviewer"] == actor
+                && matches!(
+                    t["status"].as_str(),
+                    Some("reviewing" | "awaiting_verification")
+                );
+            if !reviewer && state.authorize(&actor, "verifier", target).is_err() {
+                return Err(Failure("FORBIDDEN", "无本单证据查看权限"));
+            }
+            let referenced = t["submissions"].as_array().is_some_and(|versions| {
+                versions.iter().any(|v| {
+                    v["evidence"]["fields"].as_object().is_some_and(|fields| {
+                        fields.values().any(|value| {
+                            value
+                                .as_array()
+                                .is_some_and(|files| files.iter().any(|f| f == id))
+                        })
+                    })
+                })
+            });
+            if !referenced {
+                return Err(Failure("FORBIDDEN", "不能查看未提交的草稿附件"));
+            }
+        }
+        let owner = a["owner"].as_str().unwrap_or("").to_owned();
+        let result = Repository::file(&mut tx, id, &owner).await?;
+        let now = Repository::time(&mut tx).await?;
+        state.log(&actor, "evidence_file_view", id, request, &now);
+        if let Some(log) = state.audit.last_mut() {
+            log["reason"] = json!(reason);
+        }
         Repository::save(&mut tx, &state).await?;
         Repository::commit(tx).await?;
         Ok(result)
