@@ -51,14 +51,12 @@ async fn serve_inner(
     }
     let listener = tokio::net::TcpListener::bind(address).await?;
     let code_jobs = crate::community::south::adapter::postgres::Repository { pool: pool.clone() };
-    let catalog = crate::community::north::local::Service {
-        repo: code_jobs.clone(),
-    };
+    let catalog = crate::catalog::north::local::ReconcileCatalog::new(code_jobs.clone());
     let worker = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
         loop {
             interval.tick().await;
-            if catalog.reconcile_catalog().await.is_err() {
+            if catalog.execute().await.is_err() {
                 tracing::warn!("catalog lifecycle notifications temporarily unavailable");
             }
             if code_jobs.retry_code_jobs().await.is_err() {

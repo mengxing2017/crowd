@@ -11,7 +11,7 @@ use axum::{
 
 pub(super) async fn resolve(State(app): State<Application>, Path(code): Path<String>) -> Response {
     let r = request_id();
-    response(app.community.resolve(&code).await, &r)
+    response(app.services.promotions.execute(&code).await, &r)
 }
 
 pub(super) async fn qr(
@@ -20,7 +20,11 @@ pub(super) async fn qr(
     headers: HeaderMap,
 ) -> Response {
     let r = request_id();
-    let result = app.community.read(token(&headers), "codes", None, &r).await;
+    let result = app
+        .services
+        .queries
+        .execute(token(&headers), "codes", None, &r)
+        .await;
     match result {
         Ok(v)
             if v.as_array().is_some_and(|v| {

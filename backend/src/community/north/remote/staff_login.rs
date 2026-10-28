@@ -15,7 +15,7 @@ pub(super) async fn staff_login(
 ) -> Response {
     let r = request_id();
     let result = match parse(body) {
-        Ok(input) => app.community.staff_login(&input, &r).await,
+        Ok(input) => app.services.staff_login.execute(&input, &r).await,
         Err(e) => Err(e),
     };
     response(result, &r)

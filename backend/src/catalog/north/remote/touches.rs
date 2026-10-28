@@ -24,7 +24,7 @@ pub(super) async fn touch(
             .filter(|s| !s.is_empty() && s.len() <= 128),
         parse(body),
     ) {
-        (Some(key), Ok(v)) => app.community.touch(&v, key, &r).await,
+        (Some(key), Ok(v)) => app.services.touches.execute(&v, key, &r).await,
         _ => Err(Failure(
             "INVALID_INPUT",
             "访问需合法 JSON 及 Idempotency-Key",

@@ -12,7 +12,7 @@ pub(super) async fn product_image(
     Path(id): Path<String>,
 ) -> Response {
     let r = request_id();
-    match app.community.product_image(&id).await {
+    match app.services.product_images.execute(&id).await {
         Ok((mime, bytes)) => (
             [
                 ("content-type", mime),

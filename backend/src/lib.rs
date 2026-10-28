@@ -1,3 +1,5 @@
+mod application;
+pub use application::ApplicationServices;
 pub mod catalog;
 pub mod community;
 mod http;
@@ -12,6 +14,7 @@ use system::{
 };
 #[derive(Clone)]
 pub struct Application {
+    pub services: ApplicationServices,
     pub system: SystemService<PostgresReadiness>,
     pub community: community::north::local::Service,
 }
@@ -22,6 +25,9 @@ pub fn router(pool: PgPool) -> Router {
         .route("/readyz", get(remote::readiness))
         .route("/api/v1/system", get(remote::system_info))
         .with_state(Application {
+            services: ApplicationServices::new(community::south::adapter::postgres::Repository {
+                pool: pool.clone(),
+            }),
             system: SystemService::new(PostgresReadiness::new(pool.clone())),
             community: community::north::local::Service {
                 repo: community::south::adapter::postgres::Repository { pool },

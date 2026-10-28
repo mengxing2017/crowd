@@ -1,15 +1,19 @@
-use crate::{
-    community::{
-        domain::{Failure, Result},
-        north::local::Service,
-        south::adapter::postgres::Repository,
-    },
-    tasks::south::port::VerifiedTaskResult,
-};
+use crate::community::domain::{Failure, Result};
+use crate::community::south::adapter::postgres::Repository;
+use crate::tasks::south::port::VerifiedTaskResult;
 use serde_json::Value;
-impl Service {
-    /// Internal adapter entry only: source authentication is the adapter's responsibility.
-    pub async fn record_verified_task_result(
+
+#[derive(Clone)]
+pub struct RecordVerifiedTaskResult {
+    repo: Repository,
+}
+
+impl RecordVerifiedTaskResult {
+    pub fn new(repo: Repository) -> Self {
+        Self { repo }
+    }
+
+    pub async fn execute(
         &self,
         source: &str,
         event: &str,

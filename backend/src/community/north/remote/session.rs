@@ -15,10 +15,7 @@ pub(super) async fn redeem(
 ) -> Response {
     let r = request_id();
     let result = match parse(body) {
-        Ok(v) => match crate::community::domain::text(&v, "ticket") {
-            Ok(ticket) => app.community.repo.redeem(ticket).await,
-            Err(e) => Err(e),
-        },
+        Ok(v) => app.services.session_redemption.execute(&v).await,
         Err(e) => Err(e),
     };
     response(result, &r)

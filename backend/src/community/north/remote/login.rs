@@ -16,7 +16,12 @@ pub(super) async fn login(
 ) -> Response {
     let r = request_id();
     let result = match parse(body) {
-        Ok(input) => app.community.login(&WechatIdentity, &input, &r).await,
+        Ok(input) => {
+            app.services
+                .wechat_login
+                .execute(&WechatIdentity, &input, &r)
+                .await
+        }
         Err(e) => Err(e),
     };
     response(result, &r)

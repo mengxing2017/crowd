@@ -20,8 +20,9 @@ pub(super) async fn upload(
     let r = request_id();
     let result = match body {
         Ok(bytes) => {
-            app.community
-                .upload(token(&headers), &purpose, bytes.to_vec(), &r)
+            app.services
+                .uploads
+                .execute(token(&headers), &purpose, bytes.to_vec(), &r)
                 .await
         }
         Err(_) => Err(Failure(
@@ -49,11 +50,15 @@ pub(super) async fn file(
         Err(_) => return response(Err(Failure("INVALID_INPUT", "图片查看用途参数无效")), &r),
     };
     let result = if let Some(reason) = query.reason {
-        app.community
-            .evidence_file(token(&headers), &id, &reason, &r)
+        app.services
+            .evidence_files
+            .execute(token(&headers), &id, &reason, &r)
             .await
     } else {
-        app.community.file(token(&headers), &id, &r).await
+        app.services
+            .private_files
+            .execute(token(&headers), &id, &r)
+            .await
     };
     match result {
         Ok((mime, bytes)) => (

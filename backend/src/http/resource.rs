@@ -17,8 +17,9 @@ pub(crate) async fn read(
 ) -> Response {
     let r = request_id();
     response(
-        app.community
-            .read(token(headers), section, scope.target.as_deref(), &r)
+        app.services
+            .queries
+            .execute(token(headers), section, scope.target.as_deref(), &r)
             .await,
         &r,
     )
@@ -36,8 +37,9 @@ pub(crate) async fn command(
         .filter(|s| !s.is_empty() && s.len() <= 128);
     let result = match (key, parse(body)) {
         (Some(key), Ok(input)) => {
-            app.community
-                .command(token(headers), action, &input, key, &r)
+            app.services
+                .commands
+                .execute(token(headers), action, &input, key, &r)
                 .await
         }
         (None, _) => Err(Failure("INVALID_INPUT", "缺少有效 Idempotency-Key")),
