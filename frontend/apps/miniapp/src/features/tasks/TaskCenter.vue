@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { tasks } from './api'
 import { onMounted, ref, watch } from 'vue'
-import { download, fileUrl, upload } from '../community/api/client'
-import { taskStatusNames, type Evidence, type TaskInstance, type TaskPage } from '../community/api'
+import { download, fileUrl, upload } from '../files/api'
+import { taskStatusNames, type Evidence, type TaskInstance, type TaskPage } from './api'
 const props = defineProps<{ busy: boolean; pending: boolean; revision: number; submit: (action: string, body: Record<string, unknown>) => Promise<Record<string, unknown>>; run: (work: () => Promise<void>) => Promise<void> }>()
 const page = ref<TaskPage>()
 const selected = ref<TaskInstance>()
@@ -51,7 +51,7 @@ async function preview() {
   await saveDraft(); await act('evidence_preview'); confirmed.value = false }
 function invalidatePreview() { confirmed.value = false; if (selected.value) selected.value.preview = undefined }
 function setField(id: string, event: unknown) { draft.value.fields[id] = (event as { detail: { value: string } }).detail.value; invalidatePreview() }
-async function showImage(id: string) { const path = await download(`${fileUrl(id)}?reason=${encodeURIComponent('本人核对任务证据')}`); previewImages.value = [path] }
+async function showImage(id: string) { const path = await download(fileUrl(id, '本人核对任务证据')); previewImages.value = [path] }
 </script>
 <template>
   <view class="card">

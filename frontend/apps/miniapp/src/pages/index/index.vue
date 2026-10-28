@@ -7,8 +7,16 @@ import { attribution } from '../../features/attribution/api'
 import TaskCenter from '../../features/tasks/TaskCenter.vue'
 import { onMounted, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { BusinessError, type User, type Rule, type Promotion, type Receipt, type PublicCatalog, type PublicProduct, type Claim, type CatalogNotification } from '../../features/community/api'
-import { community, download, fileUrl, qrUrl, setToken, upload } from '../../features/community/api/client'
+import { BusinessError, executeCommand, platform } from '../../features/platform/api'
+import type { User } from '../../features/identity/api'
+import type { Rule } from '../../features/governance/api'
+import { promotion, qrUrl, type Promotion } from '../../features/promotion/api'
+import type { Receipt } from '../../features/receipts/api'
+import type { PublicCatalog, PublicProduct, CatalogNotification } from '../../features/catalog/api'
+import type { Claim } from '../../features/tasks/api'
+import { support } from '../../features/support/api'
+import { download, fileUrl, upload } from '../../features/files/api'
+import { setToken } from '../../features/session/api'
 const catalog = ref<PublicCatalog | null>(null)
 const selected = ref<PublicProduct | null>(null)
 const selectedTask = ref('')
@@ -75,7 +83,7 @@ function cents(value: number) { return `${Math.trunc(value / 100)}.${String(valu
 const imageOrigin = import.meta.env.VITE_API_ORIGIN || 'http://127.0.0.1:8080'
 
 onShow(() => { void run(loadCatalog) })
-onMounted(() => { void run(async () => { await loadCatalog(); agreement.value = await identity.agreements() }) })
+onMounted(() => { void run(async () => { await loadCatalog(); agreement.value = await governance.agreements() }) })
 let runningCount = 0
 async function run(work: () => Promise<void>) { runningCount += 1; busy.value = true; message.value = '处理中…'; try { await work(); message.value = '操作完成' } catch (e) { if (e instanceof BusinessError && e.detail.code === 'SESSION_EXPIRED') clearPrivate(); message.value = e instanceof Error ? e.message : '操作失败，请查询原结果' } finally { runningCount -= 1; busy.value = runningCount > 0 } }
 async function refresh() {
@@ -83,18 +91,18 @@ async function refresh() {
   attributionDisputes.value = (await attribution.mine()).disputes
   claims.value = await tasks.claims(); notifications.value = await catalogApi.notifications()
   taskRevision.value += 1
-  codes.value = await attribution.codes(); cases.value = await governance.cases()
+  codes.value = await promotion.codes(); cases.value = await support.cases()
 }
 async function submit(action: string, body: Record<string, unknown>) {
   if (pending.value) throw new Error('请先查询上次提交结果，或使用原请求重试')
   pending.value = { action, body, key: key(), owner: me.value?.id || '' }
-  try { const value = await community.command(action, body, pending.value.key); pending.value = null; await refresh(); return value } catch (e) { if (e instanceof BusinessError && e.detail.code !== 'SERVICE_UNAVAILABLE') pending.value = null; throw e }
+  try { const value = await executeCommand(action, body, pending.value.key); pending.value = null; await refresh(); return value } catch (e) { if (e instanceof BusinessError && e.detail.code !== 'SERVICE_UNAVAILABLE') pending.value = null; throw e }
 }
 async function login() {
   if (source.value && touchTokens.value.length === 0) await visit(source.value)
   const credential = await uni.login({ provider: 'weixin' })
   const session = await identity.login({ code: credential.code, agreed: agreed.value, agreement_id: agreement.value?.id, source: source.value || undefined, touch_token: touchTokens.value[0] })
-  if (pending.value && pending.value.owner !== session.user_id) pending.value = null; setToken(session.token); for (const token of touchTokens.value) await community.command('touch_bind', { touch_token: token }, key()); await refresh()
+  if (pending.value && pending.value.owner !== session.user_id) pending.value = null; setToken(session.token); for (const token of touchTokens.value) await executeCommand('touch_bind', { touch_token: token }, key()); await refresh()
 }
 async function choose(purpose: 'avatar' | 'wechat_receipt') {
   const choice = await uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'] })
@@ -115,7 +123,7 @@ async function showQr(id: string) { qr.value = await download(qrUrl(id)) }
 async function saveQr() { if (!qr.value) return; await uni.saveImageToPhotosAlbum({ filePath: qr.value }) }
 async function logout() {
   // Clear local data even if network fails; the server session expires independently.
-  try { await community.command('logout', {}, key()) } finally {
+  try { await executeCommand('logout', {}, key()) } finally {
     clearPrivate(); pending.value = null
   }
 }
@@ -148,7 +156,7 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
       <text v-else>协议暂不可用，新用户注册暂不开放。</text><input v-model="source" placeholder="推广来源码（可选）" />
       <checkbox-group @change="agreed = $event.detail.value.includes('agree')"><label><checkbox value="agree" :checked="agreed" />我已阅读并主动同意本版本服务协议与隐私说明</label></checkbox-group>
       <button :disabled="busy" @click="run(login)">微信登录／会话过期后重新登录</button>
-      <button :disabled="busy" @click="run(async () => { agreement = await identity.agreements() })">重新加载协议</button>
+      <button :disabled="busy" @click="run(async () => { agreement = await governance.agreements() })">重新加载协议</button>
     </view>
     <template v-else>
       <TaskCenter :key="me.id" :busy="busy" :pending="!!pending" :revision="taskRevision" :submit="submit" :run="run" />
@@ -193,7 +201,7 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
         <text>申请不自动合并身份、删除资料、释放占用或更改付款账户。注销需完成关联业务核查。</text><text v-if="cases.length === 0">暂无申请。</text><text v-for="(item, index) in cases" :key="index" class="document">{{ item.kind === 'closure' ? '注销申请' : item.kind === 'merge' ? '身份核验申请' : '资料纠错申请' }} · {{ item.status === 'pending_dependency_check' ? '待关联业务核查' : '待人工核实' }} · {{ item.id }}</text>
       </view>
       <view class="card"><text class="heading">后台登录</text><button :disabled="busy || !!pending" @click="run(async () => { const result = await submit('web_ticket', {}); ticket = String(result.ticket); await copy(ticket) })">生成并复制一次性后台票据</button><text v-if="ticket">60 秒内在管理端使用，使用后立即失效。请勿转交他人。</text></view>
-      <view v-if="pending" class="card"><text>上次提交结果未确认，请先查询原结果。重试使用原请求键及原内容。</text><button :disabled="busy" @click="run(async () => { await community.read('command_result', pending?.key); pending = null; await refresh() })">查询原结果</button><button :disabled="busy" @click="run(async () => { if (pending) { await community.command(pending.action, pending.body, pending.key); pending = null; await refresh() } })">重试原提交</button></view>
+      <view v-if="pending" class="card"><text>上次提交结果未确认，请先查询原结果。重试使用原请求键及原内容。</text><button :disabled="busy" @click="run(async () => { await platform.commandResult(pending!.key); pending = null; await refresh() })">查询原结果</button><button :disabled="busy" @click="run(async () => { if (pending) { await executeCommand(pending.action, pending.body, pending.key); pending = null; await refresh() } })">重试原提交</button></view>
     </template>
   </view>
 </template>
