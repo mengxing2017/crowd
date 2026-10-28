@@ -10,6 +10,7 @@ export const settlementsCommands = {
   settlement_claim: settlements.settlementClaim,
   settlement_handoff: settlements.settlementHandoff,
   settlement_handoff_accept: settlements.settlementHandoffAccept,
+  settlement_exception: settlements.settlementException,
   settlement_unknown: settlements.settlementUnknown,
   settlement_confirm_unpaid: settlements.settlementConfirmUnpaid,
   settlement_register: settlements.settlementRegister,
