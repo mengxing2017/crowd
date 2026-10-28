@@ -9,6 +9,12 @@ fn settle(s: &mut State, app: &mut Value, actor: &str, now: i64) -> Result<()> {
         !crate::commissions::domain::source_disputed(s, app),
         "本单佣金来源存在争议，须先核查，不得通过审核或结算登记",
     )?;
+    require(
+        app["exception"]["kind"] != "receipt_error"
+            && app["exception"]["kind"] != "registration_error"
+            && app["correction"]["status"] != "pending",
+        "资料、登记错误或待复核更正尚未解决，不可转已登记结算",
+    )?;
     let id = text(app, "id")?;
     append(
         s,
@@ -45,6 +51,17 @@ pub(super) fn register(
                 app["registration"].is_null(),
                 "本申请已有登记，请查询原结果或发起关联更正，不得再次付款",
             )?;
+            require(
+                app["exception"]["kind"] != "receipt_error"
+                    && app["exception"]["kind"] != "registration_error",
+                "资料错误须核实未付后退回重提；登记错误须关联更正，不得继续付款登记",
+            )?;
+            if !app["exception"].is_null() {
+                require(
+                    i["offline_result_confirmed"] == true,
+                    "异常后须先人工核查原线下结果，禁止再次付款",
+                )?;
+            }
             let n = cents(i, "amount_cents")?;
             let paid = number(i, "paid_at")?;
             require(paid > 0 && paid <= now, "线下付款时间不得晚于登记时间")?;
@@ -53,7 +70,10 @@ pub(super) fn register(
                 "必须核对原收款快照，不得改付新资料",
             )?;
             let voucher = text(i, "voucher_file_id")?;
-            app["registration"] = json!({"id":id,"actor":actor,"amount_cents":n,"method":app["receipt_snapshot"]["method"],"receipt_id":app["receipt_snapshot"]["id"],"paid_at":paid,"recorded_at":now,"voucher_file_id":voucher,"voucher_owner":actor,"result":"reported_paid","reason":i["reason"],"official_verified":false});
+            if !i["reference_note"].is_null() {
+                text(i, "reference_note")?;
+            }
+            app["registration"] = json!({"id":id,"actor":actor,"amount_cents":n,"method":app["receipt_snapshot"]["method"],"receipt_id":app["receipt_snapshot"]["id"],"paid_at":paid,"recorded_at":now,"voucher_file_id":voucher,"voucher_owner":actor,"result":"reported_paid","reason":i["reason"],"reference_note":i["reference_note"],"official_verified":false});
             if crate::commissions::domain::source_disputed(s, app)
                 || i["voucher_matches"] != true
                 || n != cents(app, "amount_cents")?

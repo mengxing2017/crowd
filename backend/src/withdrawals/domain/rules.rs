@@ -61,6 +61,23 @@ pub fn rule_command(
                 "启用支付宝必须明确平台收款资料检查政策，不代表官方验证",
             )?;
         }
+        if !i["alipay_formats"].is_null() {
+            let formats = i["alipay_formats"]
+                .as_array()
+                .ok_or(Failure("INVALID_INPUT", "账户格式政策无效"))?;
+            require(
+                !formats.is_empty() && formats.iter().all(|v| v == "phone" || v == "email"),
+                "请明确手机号或邮箱格式",
+            )?;
+            require(
+                i["alipay_name_required"].is_boolean(),
+                "请明确收款姓名是否必填",
+            )?;
+        }
+        if !i["receipt_retention_seconds"].is_null() {
+            cents(i, "receipt_retention_seconds")?;
+            text(i, "receipt_retention_policy")?;
+        }
         let mut r = i.clone();
         r["id"] = json!(id);
         r["version"] = json!(s.withdrawals.rules.len() + 1);

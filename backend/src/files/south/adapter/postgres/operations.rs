@@ -3,6 +3,19 @@ use crate::shared::{Failure, Result, invalid};
 use serde_json::{Value, json};
 use sqlx::{Postgres, Transaction};
 impl Repository {
+    pub async fn delete_expired_receipt(
+        tx: &mut Transaction<'_, Postgres>,
+        actor: &str,
+        id: &str,
+        seconds: i64,
+    ) -> Result<()> {
+        let result = sqlx::query("DELETE FROM crowd_files WHERE id=$1 AND owner_id=$2 AND purpose='wechat_receipt' AND created_at <= now() - ($3::double precision * interval '1 second')")
+            .bind(id).bind(actor).bind(seconds).execute(&mut **tx).await.map_err(database)?;
+        if result.rows_affected() != 1 {
+            return Err(Failure("RETENTION_PROTECTED", "文件尚在保留期内或已清理"));
+        }
+        Ok(())
+    }
     pub async fn validate_file(
         tx: &mut Transaction<'_, Postgres>,
         id: &str,

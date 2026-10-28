@@ -14,6 +14,7 @@ pub fn is_command(a: &str) -> bool {
             | "settlement_claim"
             | "settlement_handoff"
             | "settlement_handoff_accept"
+            | "settlement_exception"
             | "settlement_unknown"
             | "settlement_confirm_unpaid"
             | "settlement_register"
@@ -77,6 +78,7 @@ pub fn command(
         "settlement_claim"
         | "settlement_handoff"
         | "settlement_handoff_accept"
+        | "settlement_exception"
         | "settlement_unknown"
         | "settlement_confirm_unpaid" => super::handling::handle(s, &mut app, actor, a, i, now)?,
         _ => super::registration::register(s, &mut app, actor, a, i, id, now)?,
@@ -84,8 +86,9 @@ pub fn command(
     app["version"] = json!(app["version"].as_u64().unwrap_or(0) + 1);
     app["updated_at"] = json!(now);
     let event_version = app["version"].clone();
+    let exception = app["exception"].clone();
     app["events"].as_array_mut().unwrap().push(
-        json!({"action":a,"actor":actor,"at":now,"reason":i["reason"],"version":event_version}),
+        json!({"action":a,"actor":actor,"at":now,"reason":i["reason"],"version":event_version,"exception":exception}),
     );
     s.withdrawals.applications.insert(key.into(), app.clone());
     crate::withdrawals::domain::read(s, actor, "withdrawal_detail", key, now)

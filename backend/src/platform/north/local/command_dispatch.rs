@@ -20,6 +20,8 @@ pub(super) async fn apply(
     } = *context;
     Ok::<Value, Failure>(if matches!(action, "logout" | "web_ticket") {
         crate::identity::north::local::session_command(tx, token, actor, action).await?
+    } else if action == "receipt_cleanup" {
+        crate::receipts::north::local::cleanup(tx, state, context).await?
     } else if action == "receipt_reveal" {
         crate::receipts::north::local::reveal(state, actor, input, request, now)?
     } else if crate::commissions::domain::is_command(action) {

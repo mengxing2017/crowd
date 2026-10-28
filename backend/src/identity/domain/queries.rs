@@ -1,19 +1,12 @@
 use crate::platform::domain::State;
-use crate::receipts::domain::mask_receipt;
+use crate::receipts::domain::mask_receipts;
 use crate::shared::{Failure, Result};
 use serde_json::{Value, json};
 pub(crate) fn read(state: &State, actor: &str, section: &str, target: &str) -> Result<Value> {
     match section {
         "me" => {
             let mut value = serde_json::to_value(state.user(actor)?).expect("serialize user");
-            value["receipts"] = json!(
-                state
-                    .user(actor)?
-                    .receipts
-                    .iter()
-                    .map(mask_receipt)
-                    .collect::<Vec<_>>()
-            );
+            value["receipts"] = json!(mask_receipts(&state.user(actor)?.receipts));
             Ok(value)
         }
         "users" => {

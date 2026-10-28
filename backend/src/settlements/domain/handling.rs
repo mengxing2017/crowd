@@ -73,6 +73,32 @@ pub(super) fn handle(
                 app["status"] = json!("unknown");
             }
         }
+        "settlement_exception" => {
+            let kind = text(i, "kind")?;
+            require(
+                ["receipt_error", "unpaid", "unknown", "registration_error"].contains(&kind),
+                "异常类型无效",
+            )?;
+            if matches!(
+                app["exception"]["kind"].as_str(),
+                Some("receipt_error" | "registration_error")
+            ) {
+                require(
+                    app["exception"]["kind"] == kind,
+                    "资料或登记错误不能降级为其他异常以绕过核查",
+                )?;
+            }
+            let assignee = text(i, "assignee")?;
+            require(app["owner"] != assignee, "不可指派申请人处理本人异常")?;
+            s.authorize(assignee, "manual_handler", text(app, "owner")?)?;
+            require(
+                app["handoff"]["status"] != "pending",
+                "交接期间须先完成交接",
+            )?;
+            app["exception"] = json!({"kind":kind,"assignee":assignee,"reported_by":actor,"reason":i["reason"],"at":now});
+            app["status"] = json!("unknown");
+            app["uncertainty_reason"] = i["reason"].clone();
+        }
         "settlement_unknown" => {
             app["status"] = json!("unknown");
             app["uncertainty_reason"] = i["reason"].clone();

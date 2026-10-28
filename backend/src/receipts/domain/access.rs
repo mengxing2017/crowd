@@ -13,6 +13,7 @@ pub(crate) fn validate_input(action: &str, input: &Value) -> Result<()> {
                 "version",
             ],
         ),
+        "receipt_cleanup" => crate::shared::validate_fields(input, &["id", "version", "reason"]),
         "receipt_reveal" => crate::shared::validate_fields(input, &["id", "reason"]),
         _ => Ok(()),
     }

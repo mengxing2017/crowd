@@ -107,7 +107,11 @@ fn snapshot(s: &State, actor: &str, i: &Value, r: &Value) -> Result<Value> {
         text(receipt, "file_id")?;
         require(receipt["status"] == "confirmed", "请确认本人收款二维码")?;
     } else {
-        text(receipt, "account")?;
+        require(
+            receipt["status"] == "confirmed",
+            "请按已发布政策重新确认支付宝收款资料，草稿不可申请",
+        )?;
+        crate::receipts::domain::validate_alipay(receipt, r)?;
         require(
             r["alipay_policy_confirmed"] == true,
             "支付宝资料检查政策尚未确认",
@@ -210,7 +214,7 @@ pub fn command(
                 .any(|a| a["preview_id"] == i["preview_id"]),
             "该预览已生成申请，请查询原结果",
         )?;
-        let app = json!({"id":id,"owner":actor,"version":1,"status":"pending_review","amount_cents":n,"currency":"CNY","rule":r,"receipt_snapshot":receipt,"created_at":now,"updated_at":now,"preview_id":i["preview_id"],"events":[{"action":"apply","actor":actor,"at":now}],"handler":null,"registration":null});
+        let app = json!({"id":id,"owner":actor,"version":1,"status":"pending_review","amount_cents":n,"currency":"CNY","rule":r,"receipt_snapshot":receipt,"receipt_confirmed_at":now,"created_at":now,"updated_at":now,"preview_id":i["preview_id"],"events":[{"action":"apply","actor":actor,"at":now}],"handler":null,"registration":null});
         let allocations = crate::commissions::domain::allocate(s, actor, n)?;
         append(
             s,

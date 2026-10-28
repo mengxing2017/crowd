@@ -3,6 +3,12 @@ mod queries;
 pub(crate) use commands::command;
 pub(crate) use queries::read;
 mod masking;
-pub(crate) use masking::mask_receipt;
+pub(crate) use masking::mask_receipts;
 mod access;
 pub(crate) use access::validate_input;
+
+mod policy;
+pub(crate) use policy::{policy, validate_alipay};
+
+mod cleanup;
+pub(crate) use cleanup::cleanup_candidate;

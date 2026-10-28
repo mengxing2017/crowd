@@ -3,6 +3,10 @@ use axum::{Router, routing::post};
 pub fn routes() -> Router<Application> {
     Router::new()
         .route(
+            "/api/v1/community/commands/settlement_exception",
+            post(super::settlement_exception::handle),
+        )
+        .route(
             "/api/v1/community/commands/settlement_review",
             post(super::settlement_review::handle),
         )

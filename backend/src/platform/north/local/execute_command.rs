@@ -43,7 +43,7 @@ impl ExecuteCommand {
                 return Err(Failure("IDEMPOTENCY_CONFLICT", "同一请求键内容不同"));
             }
             let result = previous["result"].clone();
-            if action == "withdrawal_receipt_reveal" {
+            if matches!(action, "withdrawal_receipt_reveal" | "receipt_reveal") {
                 let now = Repository::time(&mut tx).await?;
                 state.log(
                     &actor,
