@@ -27,7 +27,7 @@ export function TaskRules({ me, busy, pending, run, save }: { me: User; busy: bo
     ]} />
   }
   return <Space orientation="vertical" className="full-width">
-    <Alert type="info" showIcon title="版本通过独立审核后才能关联产品。修改须创建新编号；已领取任务始终使用原快照。" description="佣金为业务标记数字。比例佣金显示计算方式，可选封顶，实际数字由可信成果基数计算；审核后仍需后续数字入账与人工线下结算。" />
+    <Alert type="info" showIcon title="版本通过独立审核后才能关联产品。修改须创建新编号；已领取任务始终使用原快照。" description="佣金为业务标记数字。比例佣金显示计算方式，可选封顶，实际数字由可信成果基数计算；审核确认后进入可申请数字核对；实际申请及人工结算仍须独立处理。" />
     <Space>{me.roles.includes('rule_manager') && <Button disabled={locked} onClick={() => open('price')}>新建定价版本</Button>}{me.roles.includes('operator') && <Button disabled={locked} onClick={() => open('template')}>新建任务模板</Button>}<Input aria-label="模板停用原因" placeholder="模板停用原因" value={reason} onChange={e => setReason(e.target.value)} /><Button disabled={locked} onClick={() => void run(load)}>刷新规则</Button></Space>
     <Tabs items={[{ key: 'prices', label: '佣金定价', children: rules('price') }, { key: 'templates', label: '任务模板与资格', children: rules('template') }]} />
     <Modal title={editor === 'price' ? '新建佣金定价版本' : '新建任务模板版本'} open={!!editor} onCancel={() => setEditor(undefined)} footer={null} width={860} destroyOnHidden>

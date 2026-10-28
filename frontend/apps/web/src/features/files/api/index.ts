@@ -10,3 +10,8 @@ export async function viewPrivateImage(id: string, reason?: string): Promise<str
   if (!response.ok) { const data = await response.json() as { error?: { message: string } }; throw new Error(data.error?.message || '无权查看私有图片') }
   return URL.createObjectURL(await response.blob())
 }
+
+export async function uploadSettlementVoucher(file: File): Promise<string> {
+ const response = await fetch(uploadPath('settlement_voucher'), { method: 'POST', headers: { ...authHeader(), 'Content-Type': 'application/octet-stream' }, body: file })
+ return decodeUpload(await response.json()).id
+}

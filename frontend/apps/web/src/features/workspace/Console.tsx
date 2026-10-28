@@ -21,7 +21,10 @@ const Catalog = lazy(() => import('../catalog/Catalog').then(module => ({ defaul
 const Attribution = lazy(() => import('../attribution/Attribution').then(module => ({ default: module.Attribution })))
 const TaskRules = lazy(() => import('../tasks/TaskRules').then(module => ({ default: module.TaskRules })))
 const Tasks = lazy(() => import('../tasks/Tasks').then(module => ({ default: module.Tasks })))
-const icons = { taskRules: <FileProtectOutlined />, tasks: <SafetyCertificateOutlined />, catalog: <BookOutlined />, attribution: <QrcodeOutlined />, welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
+const Commissions = lazy(() => import('../commissions/Commissions').then(m => ({ default: m.Commissions })))
+const WithdrawalRules = lazy(() => import('../withdrawals/WithdrawalRules').then(m => ({ default: m.WithdrawalRules })))
+const Settlements = lazy(() => import('../settlements/Settlements').then(m => ({ default: m.Settlements })))
+const icons = { commissions: <SafetyCertificateOutlined />, withdrawalRules: <FileProtectOutlined />, settlements: <SafetyCertificateOutlined />, taskRules: <FileProtectOutlined />, tasks: <SafetyCertificateOutlined />, catalog: <BookOutlined />, attribution: <QrcodeOutlined />, welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
 interface Pending { action: string; body: Record<string, unknown>; key: string; owner: string }
 function currentSection(): Section { return sections.find(section => `#/${section.key}` === window.location.hash)?.key || 'welcome' }
 async function readStaffSession() {
@@ -111,6 +114,9 @@ export function Console() {
           {active.key === 'attribution' && <Attribution me={me} busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'taskRules' && <TaskRules me={me} busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'tasks' && <Tasks me={me} busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'commissions' && <Commissions me={me} busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'withdrawalRules' && <WithdrawalRules me={me} busy={busy} pending={!!pending} run={run} save={save} />}
+          {active.key === 'settlements' && <Settlements me={me} busy={busy} pending={!!pending} run={run} save={save} />}
           {active.key === 'guide' && <Guide />}
         </Suspense></Spin>
       </Space>

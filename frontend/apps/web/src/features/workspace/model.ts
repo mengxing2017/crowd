@@ -1,4 +1,4 @@
-export type Section = 'welcome' | 'rules' | 'users' | 'promotions' | 'audit' | 'guide' | 'catalog' | 'attribution' | 'taskRules' | 'tasks'
+export type Section = 'commissions' | 'withdrawalRules' | 'settlements' | 'welcome' | 'rules' | 'users' | 'promotions' | 'audit' | 'guide' | 'catalog' | 'attribution' | 'taskRules' | 'tasks'
 export const sections: { key: Section; title: string; description: string; role?: string; roles?: string[] }[] = [
   { key: 'welcome', title: '工作台', description: '从这里开始处理今天的平台业务' },
   { key: 'rules', title: '业务规则', description: '维护规则版本，保存草稿并按需发布', role: 'rule_manager' },
@@ -8,6 +8,9 @@ export const sections: { key: Section; title: string; description: string; role?
   { key: 'attribution', title: '推广归因', description: '查看归因策略与访问统计，处理归因申诉', roles: ['rule_manager', 'attribution_reviewer'] },
   { key: 'taskRules', title: '定价与任务模板', description: '版本化佣金规则、执行步骤及参与资格', roles: ['operator', 'rule_manager', 'verifier'] },
   { key: 'tasks', title: '任务审核与质量', description: '独占审核、补交、独立复核与抽检', roles: ['task_reviewer', 'verifier'] },
+  { key: 'commissions', title: '佣金数字与流水', description: '核对数字来源、调整复核及争议暂缓', roles: ['settlement_reviewer', 'verifier', 'auditor'] },
+  { key: 'withdrawalRules', title: '提现申请规则', description: '显式配置门槛及独立复核政策', roles: ['rule_manager', 'verifier'] },
+  { key: 'settlements', title: '提现审核与人工结算', description: '独占经办、线下付款登记及核实复核', roles: ['settlement_reviewer', 'manual_handler', 'verifier', 'auditor'] },
   { key: 'audit', title: '审计日志', description: '按业务对象追踪操作与处理结果', role: 'auditor' },
   { key: 'guide', title: '使用指南', description: '了解业务边界、岗位权限与操作流程' },
 ]
