@@ -18,6 +18,7 @@ async function fixture(page: Page, roles: string[]) {
    const action = path.split('/').at(-1)!, body = request.postDataJSON() as Record<string, unknown>
    commands.push({ action, body, key: request.headers()['idempotency-key'] })
    if (action === 'settlement_claim') application = { ...application, status: 'processing', handler: 'staff', version: 3 }
+   if (action === 'settlement_exception') application = { ...application, status: 'unknown', version: 4, exception: { kind: body.kind, assignee: body.assignee, reported_by: 'staff', reason: body.reason, at: 1000 } }
    if (action === 'settlement_unknown') application = { ...application, status: 'unknown', version: 4 }
    if (action === 'settlement_register') { application = { ...application, status: 'awaiting_verification', version: 5, registration: { id: 'registration', amount_cents: 600, paid_at: 1000, recorded_at: 1100, official_verified: false } }; if (failRegistration) { failRegistration = false; return route.abort('failed') } }
    if (action === 'withdrawal_receipt_reveal') return json({ id: application.id, receipt_snapshot: { ...application.receipt_snapshot as object, file_id: 'private-original' }, registration: null, official_verified: false })
@@ -78,4 +79,22 @@ test('withdrawal rule editing requires explicit thresholds and independent publi
  await expect.poll(() => commands.length).toBe(1)
  expect(commands[0]).toMatchObject({ action: 'withdrawal_rule_propose', body: { min_cents: 100, max_cents: 1000, registration_verification: true, separate_roles: true, second_review_cents: 0 } })
  expect(commands[0].key).toBeTruthy()
+})
+
+test('manual exception classification assigns a scoped investigator and retains uncertainty', async ({ page }) => {
+ const commands = await fixture(page, ['manual_handler']); await login(page)
+ await page.getByRole('menuitem', { name: '提现审核与人工结算' }).click()
+ await page.getByRole('button', { name: '独占领取经办', exact: true }).click()
+ await page.getByLabel('处理原因与核对说明').fill('领取后核对原收款资料')
+ await page.getByRole('button', { name: '确认提交', exact: true }).click()
+ await page.getByRole('button', { name: '分类登记异常', exact: true }).click()
+ await page.getByLabel('异常分类', { exact: true }).click()
+ await page.getByText('收款资料错误', { exact: true }).click()
+ await page.getByLabel('核查责任人编号（须有本单经办权限）').fill('other-handler')
+ await page.getByLabel('处理原因与核对说明').fill('原收款图模糊，停止处理，核实是否已付')
+ await page.getByRole('button', { name: '确认提交', exact: true }).click()
+ await expect(page.getByText('待核实', { exact: true })).toBeVisible()
+ await expect(page.getByText('异常：资料错误；责任人：other-handler')).toBeVisible()
+ await expect(page.getByRole('button', { name: '登记线下付款', exact: true })).toHaveCount(0)
+ expect(commands.at(-1)).toMatchObject({ action: 'settlement_exception', body: { kind: 'receipt_error', assignee: 'other-handler', version: 3 } })
 })
