@@ -6,7 +6,7 @@
 
 ## 契约组织
 
-新增 `receipts`、`promotion`、`audit`、`support`、`files`、`platform` 子路径导出；调整原身份、归因、任务和规则客户端的职责。完整调用迁移映射见 [契约说明](../../api-contract/README.md)。`User.receipts` 是接口中的跨领域快照，类型显式引用收款领域，收款业务方法不再由身份客户端暴露。
+新增 `receipts`、`promotion`、`audit`、`support`、`files`、`platform` 子路径导出；调整原身份、归因、任务和规则客户端的职责。完整调用迁移映射见 [契约说明](../reference/api-contract.md)。`User.receipts` 是接口中的跨领域快照，类型显式引用收款领域，收款业务方法不再由身份客户端暴露。
 
 `common` 保持无业务依赖，统一 JSON 与二进制上传响应的信封／业务错误识别。文件契约只提供编码路径、上传结果类型及解码器，不依赖 DOM 或平台运行时。推广二维码路径属于推广领域。收款、推广、审计和客服的独立客户端及兼容通用入口执行相应响应校验。
 

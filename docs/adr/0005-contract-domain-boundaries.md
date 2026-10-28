@@ -15,7 +15,7 @@
 - Web 和小程序通过各自 feature 的 `api/index.ts` 接入领域客户端，复用端内 session transport，避免领域间各自保存 token。
 - 两端开发与构建均解析本地契约源码，避免新增模块在 pnpm 本地依赖副本中缺失。
 
-领域入口、职责及调用示例见 [API 契约包说明](../../api-contract/README.md)。
+领域入口、职责及调用示例见 [API 契约包说明](../reference/api-contract.md)。
 
 ## 兼容及限制
 
