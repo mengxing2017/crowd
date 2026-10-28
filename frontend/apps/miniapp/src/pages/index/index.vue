@@ -7,7 +7,7 @@ import { attribution } from '../../features/attribution/api'
 import WithdrawalCenter from '../../features/withdrawals/WithdrawalCenter.vue'
 import TaskCenter from '../../features/tasks/TaskCenter.vue'
 import { onMounted, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow, onHide } from '@dcloudio/uni-app'
 import { BusinessError, executeCommand, platform } from '../../features/platform/api'
 import type { User } from '../../features/identity/api'
 import type { Rule } from '../../features/governance/api'
@@ -83,6 +83,7 @@ async function claimTask() {
 function cents(value: number) { return `${Math.trunc(value / 100)}.${String(value % 100).padStart(2, '0')}` }
 const imageOrigin = import.meta.env.VITE_API_ORIGIN || 'http://127.0.0.1:8080'
 
+onHide(hidePrivate)
 onShow(() => { void run(loadCatalog) })
 onMounted(() => { void run(async () => { await loadCatalog(); agreement.value = await governance.agreements() }) })
 let runningCount = 0
@@ -131,6 +132,7 @@ async function logout() {
 function clearPrivate() { attributionDisputes.value = []; claims.value = []; notifications.value = []; touchTokens.value = []; hidePrivate(); setToken(''); me.value = null; nickname.value = ''; account.value = ''; name.value = ''; codes.value = []; cases.value = []; qr.value = ''; privateImage.value = ''; fullAccount.value = ''; ticket.value = ''; file.value = ''; confirmed.value = false; reason.value = ''; application.value = '' }
 // Authentication is held only in memory. No private response is persisted in platform storage.
 function hidePrivate() { if (privateImage.value) uni.getFileSystemManager().unlink({ filePath: privateImage.value, fail: () => undefined }); privateImage.value = ''; fullAccount.value = '' }
+function previewReceiptImage() { if (privateImage.value) uni.previewImage({ urls: [privateImage.value] }) }
 function copy(value: string) { return uni.setClipboardData({ data: value }) }
 </script>
 <template>
@@ -180,14 +182,14 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
         <text class="heading">本人收款资料</text><text>微信仅上传本人收款二维码；支付宝仅填写账户。上传与格式检查不代表官方账户验证。历史申请固定原资料版本。</text>
         <radio-group @change="method = $event.detail.value as 'wechat' | 'alipay'"><label><radio value="wechat" :checked="method === 'wechat'" />微信收款码</label><label><radio value="alipay" :checked="method === 'alipay'" />支付宝账户</label></radio-group>
         <button v-if="method === 'wechat'" :disabled="busy" @click="run(() => choose('wechat_receipt'))">选择本人收款码图片</button>
-        <view v-else><input v-model="account" placeholder="支付宝收款账户" /><input v-model="name" placeholder="收款姓名（可选）" /><text>支持账户形式待业务确认，当前保存为草稿，不宣称可申请使用。</text></view>
-        <checkbox-group @change="confirmed = $event.detail.value.includes('confirmed')"><label><checkbox value="confirmed" :checked="confirmed" />确认此资料可供本人线下收款</label></checkbox-group>
+        <view v-else><input v-model="account" placeholder="支付宝收款账户" /><input v-model="name" placeholder="收款姓名（可选）" /><text>账户格式及姓名要求以已发布政策为准；未配置政策时仅存草稿。格式通过不代表账户存在，付款前仍需人工核对。</text></view>
+        <checkbox-group @change="confirmed = $event.detail.value.includes('confirmed')"><label><checkbox value="confirmed" :checked="confirmed" />确认此资料正确、可供本人线下收款（声明版本 receipt-self-v1）</label></checkbox-group>
         <button :disabled="busy || !!pending || !confirmed || (method === 'wechat' && !file)" @click="run(receipt)">保存为新的资料版本</button>
         <text v-if="me.receipts.length === 0">尚未填写收款资料。</text>
-        <view v-for="record in me.receipts" :key="record.id" class="record"><text>{{ record.method || '停用记录' }} · {{ record.status }} · V{{ record.version }} {{ record.account }}</text>
-          <template v-if="record.method"><button :disabled="busy || !!pending" @click="run(() => reveal(record))">本人查看完整资料（留痕）</button><button :disabled="busy || !!pending" @click="run(async () => { await submit('receipt_disable', { id: record.id, version: me?.version }) })">停用并保留历史</button></template>
+        <view v-for="record in me.receipts" :key="record.id" class="record"><text>{{ record.method || '停用记录' }} · {{ record.status }} · V{{ record.version }} {{ record.account }} {{ record.is_default ? '默认新申请资料' : '' }}</text>
+          <template v-if="record.method"><button :disabled="busy || !!pending" @click="run(() => reveal(record))">本人查看完整资料（留痕）</button><button :disabled="busy || !!pending" @click="run(async () => { await submit('receipt_disable', { id: record.id, version: me?.version }) })">停用并保留历史</button><button v-if="record.method === 'wechat' && me.receipts.some(r => r.disables === record.id) && !me.receipts.some(r => r.cleans === record.id)" :disabled="busy || !!pending" @click="run(async () => { await submit('receipt_cleanup', { id: record.id, version: me?.version, reason: '本人请求按已发布保留政策清理停用且无引用的码图' }) })">按保留政策清理无引用旧图</button></template>
         </view>
-        <image v-if="privateImage" :src="privateImage" mode="widthFix" /><text v-if="fullAccount">{{ fullAccount }}</text><button v-if="privateImage || fullAccount" @click="hidePrivate">关闭敏感资料</button>
+        <text v-if="privateImage">请检查码图清晰、完整且无遮挡；点击图片放大核对，不代表官方收款认证。</text><image v-if="privateImage" @click="previewReceiptImage" :src="privateImage" mode="widthFix" /><text v-if="fullAccount">{{ fullAccount }}</text><button v-if="privateImage || fullAccount" @click="hidePrivate">关闭敏感资料</button>
       </view>
       <view class="card">
         <text class="heading">个人独立推广码</text><text>推广码与收款码不同；扫码不代表完成任务，也不产生可申请佣金。</text>

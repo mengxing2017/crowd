@@ -5,6 +5,7 @@ export type * from '@crowd/api-contract/receipts'
 
 export const receiptsCommands = {
   receipt: receipts.receipt,
+  receipt_cleanup: receipts.receiptCleanup,
   receipt_disable: receipts.receiptDisable,
   receipt_reveal: receipts.receiptReveal,
 }
