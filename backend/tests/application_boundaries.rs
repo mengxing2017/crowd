@@ -4,7 +4,18 @@ use std::{fs, path::Path};
 fn application_use_cases_have_separate_owners_and_single_entrypoints() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut use_cases = 0;
-    for domain in ["community", "catalog", "tasks"] {
+    for domain in [
+        "platform",
+        "identity",
+        "receipts",
+        "promotion",
+        "governance",
+        "audit",
+        "support",
+        "files",
+        "catalog",
+        "tasks",
+    ] {
         let north = source.join(domain).join("north");
         assert!(!north.join("local.rs").exists());
         for entry in fs::read_dir(north.join("local")).unwrap() {
@@ -54,7 +65,18 @@ fn application_use_cases_have_separate_owners_and_single_entrypoints() {
 #[test]
 fn http_and_workers_use_concrete_application_services() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for domain in ["community", "catalog", "tasks"] {
+    for domain in [
+        "platform",
+        "identity",
+        "receipts",
+        "promotion",
+        "governance",
+        "audit",
+        "support",
+        "files",
+        "catalog",
+        "tasks",
+    ] {
         for entry in fs::read_dir(source.join(domain).join("north/remote")).unwrap() {
             let path = entry.unwrap().path();
             let text = fs::read_to_string(&path).unwrap();
