@@ -16,9 +16,11 @@ Crowd 是产品推广、任务执行、佣金数字审核及人工线下结算�
 - `mod.rs` 只声明文件模块与重新导出，不定义类型、端口、常量、函数、业务实现或内联模块；实现放入对应职责文件。`backend/tests/module_boundaries.rs` 递归验证此边界。
 - HTTP remote 适配器按实体或单一用例拆分，路由组装与 handler 分开；已知查询和命令使用固定操作的具名 handler，不在通用入口追加多实体业务分支。旧通配入口仅用于协议兼容，技术性的追踪、鉴权头读取、请求解析和错误信封可共用。
 - 应用服务使用 `north/local/` 目录按用例组织，每个服务提供单一 `execute` 入口，构造及依赖组装不承载业务。禁止跨领域为聚合 `Service` 追加实现；原兼容门面只委托，HTTP 和后台任务使用具体用例。共享查询、命令事务管线保留认证、幂等、审计及失败恢复边界，不能因拆分文件新增独立提交或削弱状态回滚。边界验证见 `backend/tests/application_boundaries.rs`。
+- `community` 仅作为旧 Rust 路径的兼容导出。身份／权限归 `identity`，收款资料归 `receipts`，推广码归 `promotion`，平台规则版本归 `governance`，审计归 `audit`，客服待核查申请归 `support`；产品及任务规则继续归 `catalog` 和 `tasks`。`platform` 仅协调兼容协议、共享事务和历史状态存储，不新增具体业务规则；新代码依赖实际所属模块，领域实现不依赖 Axum 或 SQLx。边界与兼容回归见 `backend/tests/domain_boundaries.rs`、`backend/tests/domain_compatibility.rs` 和 ADR 0009。
 - migration 位于 `backend/migrations/`，递增、forward-only，启动自动执行。发布与回退须兼容已有客户端和已有数字变更和人工登记记录，不以删除历史记录实现回退。
 - `frontend/apps/web/` 是 React 管理端；`frontend/apps/miniapp/` 是 uni-app Vue 3 微信小程序，两端独立构建、禁止相互 import。按功能组织 feature，`shared/` 不保存接口 DTO/client。
 - `api-contract/` 是不单独部署的平台中立 TypeScript 类型及 client 包，不依赖 DOM 或平台运行时。仅 feature 的 `api/index.ts` 引用 `@crowd/api-contract/*`，请求适配由各端提供。
+- 契约与前端按后端实际职责归属接入；新调用不得使用 `@crowd/api-contract/community` 或重建 `features/community` 汇总层。`workspace` 仅组装管理端页面，`platform` 只协调显式领域命令表及原结果查询，文件二进制传输留在各端 `features/files/api/index.ts`。`identity` 不接收收款、协议或任务资格方法，`governance` 不接收审计及客服方法，`attribution` 不接收推广码归属方法。契约测试和两端 Lint 持续验证接口依赖边界，迁移映射见 ADR 0010。
 - 公开接口变更同步后端、契约包与契约验证，保持已发布小程序兼容；错误提供稳定业务码、可读说明和追踪编号，不能泄露内部凭据。
 - 本地开发默认 `devbox run -- make api-dev`（等同 `dev-embedded`），自动创建临时 PostgreSQL 17，忽略外部数据库 URL，正常退出删除数据；需要持久化时使用 `api-external`。`test-embedded` 验证生命周期，`test-business` 自动使用独立嵌入式测试库。
 - Compose 仅部署 web、api、postgres，小程序独立上传微信平台。开发、测试和生产的数据库、身份、外部任务来源凭据及文件存储隔离。

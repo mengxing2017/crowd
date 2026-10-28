@@ -1,5 +1,7 @@
 # ADR 0008：local 应用服务按用例拆分
 
+后续领域归属调整见 [ADR 0009](0009-community-domain-ownership.md)：本文记录用例拆分时的路径，当前用例已迁至各自领域，`community` 仅保留兼容导出。
+
 ## 问题
 
 `community/north/local.rs` 集中登录、资料、通用读写、上传及证据查看；`catalog/north/local.rs` 集中生命周期、目录、访问及完成事件；`tasks/north/local.rs` 又为同一个 `community::Service` 追加方法。只将这些 `impl Service` 移入多个文件不能建立应用服务的职责边界。

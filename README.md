@@ -44,7 +44,9 @@ Crowd 是面向产品推广与任务佣金管理的平台。目标流程为：�
 ## 当前工程状态
 
 ```text
-backend/                system、community、catalog 与 tasks；业务领域、用例、HTTP、端口和 PostgreSQL/微信适配
+backend/                identity、receipts、promotion、governance、audit、support、catalog 与 tasks 业务模块
+  src/platform/         跨领域事务、兼容协议分派与共享状态存储；community 仅保留旧 Rust 路径导出
+  src/files/            文件上传与授权访问；src/shared/ 保存无业务归属的错误、校验和整数金额显示
   migrations/           工程元数据、身份、会话、资料、推广、目录、规则和任务，启动自动迁移
 frontend/apps/web/      React 管理端：管理员密码/一次性票据登录、规则中心、岗位操作、定价模板、任务审核、审计及推广落地页
 frontend/apps/miniapp/  uni-app 用户端：微信登录、资料、私有收款图片、推广码、任务执行/证据/回执、纠错/注销申请
@@ -55,6 +57,10 @@ docs/requirements/     M01–M12 需求与实现、依赖的追踪表
 已实现 M01–M04 的规则版本/动作权限及数据范围、可信微信身份交换与会话、资料版本/用途隔离、私有图片、个人与定向推广码及操作审计。手机号绑定尚未启用，支付宝支持形式未确认时只保存草稿。身份合并、注销及收款纠错登记待核查申请，不自动执行跨模块清理。M05–M12 后续接入目录、归因、定价、任务执行、证据及审核；完整数字台账、可申请余额、提现及人工结算仍未实现，不能宣称需求已全部业务验收通过。
 
 系统既有端点 `/healthz`、`/readyz`、`/api/v1/system` 保持兼容；新增 `/api/v1/community/*`。就绪检查仍查询数据库元数据，失败 503，迁移失败阻止启动。部署与接口参数见 [M01–M04 运行记录](docs/runbooks/m01-m04.md)，逐条范围见 [需求追踪表](docs/requirements/m01-m04.md)。
+
+后端各领域的规则与接口归属、共享事务和历史数据兼容边界见 [ADR 0009](docs/adr/0009-community-domain-ownership.md)。URL 中的 `community` 为已发布协议名称，不再表示所有后端业务属于同一领域。
+
+契约包和两端前端采用相同领域归属，收款资料、推广码、审计、客服和文件均有独立入口；前端不再经 community 汇总客户端。迁移映射、文件适配及原请求重试约束见 [ADR 0010](docs/adr/0010-contract-frontend-domain-ownership.md) 和 [契约说明](api-contract/README.md)。
 
 最新任务范围、配置步骤和验证记录见 [M08–M12 需求追踪](docs/requirements/m08-m12.md) 与 [运行手册](docs/runbooks/m08-m12.md)。旧内嵌任务继续保留历史快照；启用新版执行须关联批准的定价及模板。
 
