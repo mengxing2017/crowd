@@ -1,5 +1,6 @@
 pub mod catalog;
 pub mod community;
+mod http;
 pub mod runtime;
 pub mod system;
 pub mod tasks;
