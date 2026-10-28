@@ -15,6 +15,7 @@ Crowd 是产品推广、任务执行、佣金数字审核及人工线下结算�
 - 后端使用 Rust / Axum / SQLx。按业务模块组织 `domain/`、`north/local/`、`north/remote/`、`south/port/`、`south/adapter/postgres/`；HTTP 层不写 SQL，领域规则不依赖 Axum 或 SQLx。可选外部任务成果事件通过端口及适配器隔离，不为人工结算预设支付网关。
 - `mod.rs` 只声明文件模块与重新导出，不定义类型、端口、常量、函数、业务实现或内联模块；实现放入对应职责文件。`backend/tests/module_boundaries.rs` 递归验证此边界。
 - HTTP remote 适配器按实体或单一用例拆分，路由组装与 handler 分开；已知查询和命令使用固定操作的具名 handler，不在通用入口追加多实体业务分支。旧通配入口仅用于协议兼容，技术性的追踪、鉴权头读取、请求解析和错误信封可共用。
+- 应用服务使用 `north/local/` 目录按用例组织，每个服务提供单一 `execute` 入口，构造及依赖组装不承载业务。禁止跨领域为聚合 `Service` 追加实现；原兼容门面只委托，HTTP 和后台任务使用具体用例。共享查询、命令事务管线保留认证、幂等、审计及失败恢复边界，不能因拆分文件新增独立提交或削弱状态回滚。边界验证见 `backend/tests/application_boundaries.rs`。
 - migration 位于 `backend/migrations/`，递增、forward-only，启动自动执行。发布与回退须兼容已有客户端和已有数字变更和人工登记记录，不以删除历史记录实现回退。
 - `frontend/apps/web/` 是 React 管理端；`frontend/apps/miniapp/` 是 uni-app Vue 3 微信小程序，两端独立构建、禁止相互 import。按功能组织 feature，`shared/` 不保存接口 DTO/client。
 - `api-contract/` 是不单独部署的平台中立 TypeScript 类型及 client 包，不依赖 DOM 或平台运行时。仅 feature 的 `api/index.ts` 引用 `@crowd/api-contract/*`，请求适配由各端提供。
