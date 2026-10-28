@@ -6,3 +6,4 @@
 - [M05–M07 需求与实现追踪](/requirements/m05-m07)
 - [M08–M12 实现与验收追踪](/requirements/m08-m12)
 - [M13–M16 实现与验证追踪](/requirements/m13-m16)
+- [M17–M19 收款资料与人工登记追踪](/requirements/m17-m19)

@@ -9,3 +9,4 @@
 - [M08–M12 运行与验证](/runbooks/m08-m12)
 - [M13–M16 运行与验证记录](/runbooks/m13-m16)
 - [Web 管理端重构与验证](/runbooks/web-console)
+- [M17–M19 收款资料与人工异常运行手册](/runbooks/m17-m19)
