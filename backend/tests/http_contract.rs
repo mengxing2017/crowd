@@ -124,6 +124,8 @@ async fn entity_command_handlers_preserve_json_and_idempotency_validation() {
     for action in [
         "profile",
         "receipt",
+        "receipt_cleanup",
+        "settlement_exception",
         "code_rotate",
         "rule_save",
         "correction",

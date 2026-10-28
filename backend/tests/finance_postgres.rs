@@ -389,4 +389,207 @@ async fn concurrent_holds_cancel_claim_race_idempotency_and_registration_failure
     assert_eq!(sum["held_cents"], 0);
     assert_eq!(sum["settled_cents"], 600);
     assert_eq!(sum["consistent"], true);
+    // M17–M19: explicit policies, immutable snapshots and transactional private-file retention.
+    let mut tx = repo.begin().await.unwrap();
+    let state = Repository::load(&mut tx).await.unwrap();
+    let mut policy = state.withdrawals.rules.last().unwrap().clone();
+    drop(tx);
+    policy["methods"] = json!(["wechat", "alipay"]);
+    policy["alipay_policy"] = json!("隔离测试：邮箱格式，姓名不必填，非官方验证");
+    policy["alipay_policy_confirmed"] = json!(true);
+    policy["alipay_formats"] = json!(["email"]);
+    policy["alipay_name_required"] = json!(false);
+    policy["receipt_retention_seconds"] = json!(1);
+    policy["receipt_retention_policy"] = json!("隔离测试期限，保留所有历史申请引用，不作正式政策");
+    policy["reason"] = json!("测试资料政策");
+    let proposed = command(
+        &app,
+        &tokens[2],
+        "withdrawal_rule_propose",
+        policy,
+        "receipt-policy",
+    )
+    .await;
+    command(
+        &app,
+        &tokens[5],
+        "withdrawal_rule_review",
+        json!({"id":proposed["id"],"approve":true,"reason":"独立确认测试政策"}),
+        "receipt-policy-publish",
+    )
+    .await;
+    let me = query(&app, &tokens[0], "me").await;
+    let alipay = command(&app,&tokens[0],"receipt",json!({"method":"alipay","account":"receipt@example.test","confirmed":true,"version":me["version"]}),"receipt-alipay").await;
+    assert_eq!(alipay["status"], "confirmed");
+    let me = query(&app, &tokens[0], "me").await;
+    assert!(!me.to_string().contains("receipt@example.test"));
+    let original = command(
+        &app,
+        &tokens[0],
+        "withdrawal_receipt_reveal",
+        json!({"id":app_id,"reason":"核查原申请"}),
+        "receipt-original-reveal",
+    )
+    .await;
+    assert_eq!(original["receipt_snapshot"]["id"], receipt["id"]);
+    let me = query(&app, &tokens[0], "me").await;
+    command(
+        &app,
+        &tokens[0],
+        "receipt_disable",
+        json!({"id":receipt["id"],"version":me["version"]}),
+        "disable-original",
+    )
+    .await;
+    let me = query(&app, &tokens[0], "me").await;
+    assert!(
+        app.commands
+            .execute(
+                &tokens[0],
+                "receipt_cleanup",
+                &json!({"id":receipt["id"],"version":me["version"],"reason":"历史引用须保全"}),
+                "cleanup-protected",
+                "r"
+            )
+            .await
+            .is_err()
+    );
+    let mut image_bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 2)
+        .write_to(&mut image_bytes, image::ImageFormat::Png)
+        .unwrap();
+    let spare_file = app
+        .uploads
+        .execute(
+            &tokens[0],
+            "wechat_receipt",
+            image_bytes.into_inner(),
+            "spare-upload",
+        )
+        .await
+        .unwrap();
+    let me = query(&app, &tokens[0], "me").await;
+    let spare = command(&app,&tokens[0],"receipt",json!({"method":"wechat","file_id":spare_file["id"],"confirmed":true,"version":me["version"]}),"spare-save").await;
+    let me = query(&app, &tokens[0], "me").await;
+    command(
+        &app,
+        &tokens[0],
+        "receipt_disable",
+        json!({"id":spare["id"],"version":me["version"]}),
+        "spare-disable",
+    )
+    .await;
+    sqlx::query("UPDATE crowd_files SET created_at=now()-interval '1 day' WHERE id=$1")
+        .bind(spare_file["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let me = query(&app, &tokens[0], "me").await;
+    let cleanup =
+        json!({"id":spare["id"],"version":me["version"],"reason":"按测试保留政策清理无引用旧图"});
+    assert!(
+        app.commands
+            .execute(
+                &tokens[1],
+                "receipt_cleanup",
+                &cleanup,
+                "cleanup-other",
+                "r"
+            )
+            .await
+            .is_err()
+    );
+    sqlx::query("UPDATE crowd_files SET created_at=now()+interval '1 day' WHERE id=$1")
+        .bind(spare_file["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        app.commands
+            .execute(
+                &tokens[0],
+                "receipt_cleanup",
+                &cleanup,
+                "cleanup-too-soon",
+                "r"
+            )
+            .await
+            .is_err()
+    );
+    sqlx::query("UPDATE crowd_files SET created_at=now()-interval '1 day' WHERE id=$1")
+        .bind(spare_file["id"].as_str().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    // A failed state write must roll back the binary deletion and allow the original key to recover.
+    sqlx::query("CREATE FUNCTION receipt_fail_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.document->'users'->TG_ARGV[0]->'receipts') r WHERE r->>'cleans'=TG_ARGV[1]) THEN RAISE EXCEPTION 'isolated cleanup fault'; END IF; RETURN NEW; END $$").execute(&pool).await.unwrap();
+    let trigger = format!(
+        "CREATE TRIGGER receipt_cleanup_fail BEFORE UPDATE ON crowd_state FOR EACH ROW EXECUTE FUNCTION receipt_fail_cleanup('{}','{}')",
+        ids[0],
+        spare["id"].as_str().unwrap()
+    );
+    sqlx::query(&trigger).execute(&pool).await.unwrap();
+    assert!(
+        app.commands
+            .execute(
+                &tokens[0],
+                "receipt_cleanup",
+                &cleanup,
+                "spare-cleanup",
+                "cleanup-fault"
+            )
+            .await
+            .is_err()
+    );
+    sqlx::query("DROP TRIGGER receipt_cleanup_fail ON crowd_state")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP FUNCTION receipt_fail_cleanup()")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM crowd_files WHERE id=$1)")
+        .bind(spare_file["id"].as_str().unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(exists, "failed cleanup must retain private bytes");
+    let cleaned = command(
+        &app,
+        &tokens[0],
+        "receipt_cleanup",
+        cleanup.clone(),
+        "spare-cleanup",
+    )
+    .await;
+    assert_eq!(cleaned["status"], "cleaned");
+    assert_eq!(
+        command(
+            &app,
+            &tokens[0],
+            "receipt_cleanup",
+            cleanup,
+            "spare-cleanup"
+        )
+        .await,
+        cleaned
+    );
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM crowd_files WHERE id=$1)")
+        .bind(spare_file["id"].as_str().unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(!exists);
+    assert!(
+        app.sensitive_files
+            .execute(
+                &tokens[4],
+                original["receipt_snapshot"]["file_id"].as_str().unwrap(),
+                "保留历史码图核查",
+                "r"
+            )
+            .await
+            .is_ok()
+    );
 }

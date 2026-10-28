@@ -699,3 +699,83 @@ fn cancelled_application_with_disputed_source_moves_hold_to_dispute_instead_of_f
         1000
     );
 }
+
+#[test]
+fn receipt_exception_keeps_hold_blocks_registration_and_requires_original_handler() {
+    let mut s = setup();
+    apply(&mut s, "exception", 600);
+    ready(&mut s, "exception");
+    process(
+        &mut s,
+        "handler",
+        "settlement_claim",
+        "exception",
+        json!({}),
+    )
+    .unwrap();
+    assert!(
+        process(
+            &mut s,
+            "other",
+            "settlement_exception",
+            "exception",
+            json!({"kind":"receipt_error","assignee":"other"})
+        )
+        .is_err()
+    );
+    assert!(
+        process(
+            &mut s,
+            "handler",
+            "settlement_exception",
+            "exception",
+            json!({"kind":"receipt_error","assignee":"alice"})
+        )
+        .is_err()
+    );
+    let a = process(
+        &mut s,
+        "handler",
+        "settlement_exception",
+        "exception",
+        json!({"kind":"receipt_error","assignee":"other"}),
+    )
+    .unwrap();
+    assert_eq!(a["status"], "unknown");
+    assert_eq!(a["exception"]["assignee"], "other");
+    assert!(
+        process(
+            &mut s,
+            "handler",
+            "settlement_exception",
+            "exception",
+            json!({"kind":"unknown","assignee":"other"})
+        )
+        .is_err()
+    );
+    assert_eq!(ledger::summary(&s, "alice").unwrap()["held_cents"], 600);
+    assert!(process(&mut s,"handler","settlement_register","exception",json!({"amount_cents":600,"paid_at":150,"receipt_id":"receipt","receipt_confirmed":true,"voucher_file_id":"v","voucher_matches":true})).is_err());
+    assert!(
+        process(
+            &mut s,
+            "other",
+            "settlement_confirm_unpaid",
+            "exception",
+            json!({"confirmed_unpaid":true,"processing_stopped":true})
+        )
+        .is_err()
+    );
+    process(
+        &mut s,
+        "handler",
+        "settlement_confirm_unpaid",
+        "exception",
+        json!({"confirmed_unpaid":true,"processing_stopped":true}),
+    )
+    .unwrap();
+    assert_eq!(ledger::summary(&s, "alice").unwrap()["held_cents"], 0);
+    assert_eq!(
+        ledger::summary(&s, "alice").unwrap()["available_cents"],
+        1000
+    );
+}
