@@ -8,6 +8,7 @@ export function createReceipts(transport: Transport) {
   return {
     receipts: (owner: string) => resource.read<Receipt[]>('receipts', owner),
     receipt: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('receipt', body, key),
+    receiptCleanup: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('receipt_cleanup', body, key),
     receiptDisable: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('receipt_disable', body, key),
     receiptReveal: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('receipt_reveal', body, key),
   }

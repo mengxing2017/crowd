@@ -11,6 +11,7 @@ export function createSettlements(transport: Transport) {
     settlementClaim: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('settlement_claim', body, key),
     settlementHandoff: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('settlement_handoff', body, key),
     settlementHandoffAccept: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('settlement_handoff_accept', body, key),
+    settlementException: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('settlement_exception', body, key),
     settlementUnknown: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('settlement_unknown', body, key),
     settlementConfirmUnpaid: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('settlement_confirm_unpaid', body, key),
     settlementRegister: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('settlement_register', body, key),

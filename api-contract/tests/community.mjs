@@ -232,3 +232,21 @@ for (const [domain, commands] of Object.entries(financeCommands)) {
  }
 }
 console.log('M13–M16: Rust summary fixture, integer cents, domain command ownership and stable retry keys passed')
+
+// M17–M19 keep owned endpoints and original retry keys across sensitive operations.
+for (const [client, method, action] of [
+  [domains.receipts.createReceipts, 'receiptCleanup', 'receipt_cleanup'],
+  [domains.settlements.createSettlements, 'settlementException', 'settlement_exception'],
+]) {
+  let sent
+  const api = client(async request => { sent = request; return { data: { id: 'original', status: 'unknown' }, request_id: 'receipt-contract' } })
+  await api[method]({ id: 'original', version: 3, reason: 'purpose' }, 'original-key')
+  assert.equal(sent.path, `/api/v1/community/commands/${action}`)
+  assert.equal(sent.key, 'original-key')
+}
+console.log('M17–M19: retention cleanup and classified exception clients preserve owned routes and retry keys')
+
+const receiptFixture = JSON.parse(await readFile(new URL('../fixtures/receipt-confirmed.json', import.meta.url), 'utf8'))
+const receiptClient = domains.receipts.createReceipts(async () => ({ data: receiptFixture, request_id: 'receipt-fixture' }))
+assert.deepEqual(await receiptClient.receiptReveal({ id: 'first', reason: '本人核对' }, 'receipt-key'), receiptFixture)
+await assert.rejects(domains.receipts.createReceipts(async () => ({ data: { ...receiptFixture, confirmed_at: 1 }, request_id: 'invalid-receipt' })).receiptReveal({ id: 'first', reason: '核对' }, 'receipt-key'))

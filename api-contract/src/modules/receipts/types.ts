@@ -1,1 +1,1 @@
-export interface Receipt { id: string; method?: 'wechat' | 'alipay'; account?: string; name?: string; file_id?: string; status: string; version?: number; disables?: string }
+export interface Receipt { id: string; method?: 'wechat' | 'alipay'; account?: string; name?: string; file_id?: string; status: string; version?: number; disables?: string; is_default?: boolean; declaration_version?: string; confirmed_at?: string; policy_id?: string; cleans?: string }

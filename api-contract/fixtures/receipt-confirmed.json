@@ -1,0 +1,12 @@
+{
+  "id": "first",
+  "method": "wechat",
+  "status": "confirmed",
+  "time": "2026-10-28T00:00:00Z",
+  "owner": "alice",
+  "official_verified": false,
+  "declaration_version": "receipt-self-v1",
+  "confirmed_at": "2026-10-28T00:00:00Z",
+  "file_id": "first",
+  "version": 2
+}
