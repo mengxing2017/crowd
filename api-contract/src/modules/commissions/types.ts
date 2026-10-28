@@ -1,0 +1,6 @@
+export interface CommissionSummary { owner: string; currency: 'CNY'; version: number; pending_cents: number; confirmed_cents: number; available_cents: number; held_cents: number; disputed_cents: number; settled_cents: number; consistent: boolean; notice: string }
+export interface CommissionEntry { id: string; key: string; owner: string; kind: string; amount_cents: number; source: string; actor: string; at: number; currency: 'CNY'; detail: Record<string, unknown>; external_payment: false }
+export interface CommissionPage { items: CommissionEntry[]; next_cursor: number | null; total: number }
+export interface CommissionProposal { id: string; owner: string; new_owner?: string; amount_cents: number; source: string; business_key: string; actor: string; reason: string; status: string }
+export interface CommissionDispute { id: string; owner: string; source: string; amount_cents: number; status: string; reason: string; responsible: string }
+export interface CommissionSource { owner: string; source: string; task: { id: string; product_id: string; status: string; price: Record<string, unknown>; calculation: Record<string, unknown> | null } | null; applications: { id: string; status: string; amount_cents: number; rule_version: number; receipt_version: number }[]; records: CommissionEntry[] }

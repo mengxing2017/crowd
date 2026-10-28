@@ -10,7 +10,7 @@ assert.ok(entry.statements.length > 0 && entry.statements.every(statement => ts.
 const output = await mkdtemp(join(tmpdir(), 'crowd-community-contract-'))
 let community
 let domains
-const domainNames = ['identity', 'catalog', 'attribution', 'tasks', 'governance', 'receipts', 'promotion', 'audit', 'support', 'files', 'platform', 'common', 'system']
+const domainNames = ['commissions', 'withdrawals', 'settlements', 'identity', 'catalog', 'attribution', 'tasks', 'governance', 'receipts', 'promotion', 'audit', 'support', 'files', 'platform', 'common', 'system']
 try {
   const program = ts.createProgram(['community', ...domainNames].map(domain => fileURLToPath(new URL(`../src/modules/${domain}/index.ts`, import.meta.url))), {
     target: ts.ScriptTarget.ES2022,
@@ -208,3 +208,27 @@ async function frontendBoundaries(directory) {
 }
 for (const app of ['web', 'miniapp']) await frontendBoundaries(fileURLToPath(new URL(`../../frontend/apps/${app}/src`, import.meta.url)))
 console.log('Frontend boundaries: both apps use owned feature APIs and no community facade')
+
+const commissionSummary = JSON.parse(await readFile(new URL('../fixtures/commission-summary.json', import.meta.url), 'utf8'))
+const financeApi = domains.commissions.createCommissions(async r => { request = r; return { data: commissionSummary, request_id: 'rust-commission-summary' } })
+assert.deepEqual(await financeApi.summary('alice'), commissionSummary)
+assert.equal(request.path, '/api/v1/community/read/commission_summary?target=alice')
+for (const n of [1.5, Number.MAX_SAFE_INTEGER + 1, '100']) {
+ await assert.rejects(domains.commissions.createCommissions(async () => ({ data: { ...commissionSummary, available_cents: n }, request_id: 'invalid-cents' })).summary())
+}
+const financeCommands = {
+ commissions: ['commissionAdjustPropose', 'commissionAdjustReview', 'commissionDispute', 'commissionDisputeResolve'],
+ withdrawals: ['withdrawalRulePropose', 'withdrawalRuleReview', 'withdrawalPreview', 'withdrawalApply', 'withdrawalCancel', 'withdrawalReceiptReveal'],
+ settlements: ['settlementReview', 'settlementSecondReview', 'settlementBatchPreview', 'settlementBatchReview', 'settlementClaim', 'settlementHandoff', 'settlementHandoffAccept', 'settlementUnknown', 'settlementConfirmUnpaid', 'settlementRegister', 'settlementVerify', 'settlementCorrectionPropose', 'settlementCorrectionReview'],
+}
+for (const [domain, commands] of Object.entries(financeCommands)) {
+ const client = domains[domain][`create${domain[0].toUpperCase()}${domain.slice(1)}`](async r => { request = r; return { data: { id: 'test' }, request_id: 'finance-contract' } })
+ for (const command of commands) {
+  const body = { id: 'application', version: 7, reason: '人工核查', amount_cents: 600 }
+  await client[command](body, 'original-finance-request')
+  assert.equal(request.path, `/api/v1/community/commands/${command.replace(/[A-Z]/g, s => `_${s.toLowerCase()}`)}`)
+  assert.equal(request.key, 'original-finance-request')
+  assert.deepEqual(request.body, body)
+ }
+}
+console.log('M13–M16: Rust summary fixture, integer cents, domain command ownership and stable retry keys passed')

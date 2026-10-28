@@ -18,7 +18,10 @@
     "./audit": "./src/modules/audit/index.ts",
     "./support": "./src/modules/support/index.ts",
     "./files": "./src/modules/files/index.ts",
-    "./platform": "./src/modules/platform/index.ts"
+    "./platform": "./src/modules/platform/index.ts",
+    "./commissions": "./src/modules/commissions/index.ts",
+    "./withdrawals": "./src/modules/withdrawals/index.ts",
+    "./settlements": "./src/modules/settlements/index.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

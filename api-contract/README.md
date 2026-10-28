@@ -63,3 +63,9 @@ make check-web
 ```
 
 契约测试在临时目录编译并加载完整模块依赖，验证入口仅包含导出、公开运行时成员、共享 Rust 序列化样本、独立领域客户端、响应校验、请求编码及幂等键；完成后清理临时产物。`make check-web` 还检查 Web 和小程序的类型、规范及构建。两端开发配置均直接解析契约源码，避免 pnpm 本地文件依赖副本遗漏新增领域文件。
+
+## M13–M16 领域入口
+
+新增 `@crowd/api-contract/commissions`、`/withdrawals`、`/settlements`，分别负责数字记录与核对、规则与申请、人工经办与登记复核。金额为 CNY 安全整数分；`withdrawalStatusNames` 明确区分待人工处理、待核实、付款登记待复核与已登记结算。`commission-summary.json` 由 Rust 与 TypeScript 共用验证。
+
+每笔确认使用同一请求键；最终申请绑定预览、汇总、原收款资料及规则版本。超额／版本冲突的错误 `details` 可携带最新汇总与本人申请，不能静默缩额。原结果通过 platform 查询；不得把重试变为再次线下付款。完整调用及权限见 [M13–M16 手册](../docs/runbooks/m13-m16.md)。契约不提供支付、查单或自动付款功能。
