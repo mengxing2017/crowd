@@ -14,3 +14,7 @@
 - [ADR 0010：契约与两端前端同步领域归属](/adr/0010-contract-frontend-domain-ownership)
 - [ADR 0011：佣金数字、提现申请与人工结算](/adr/0011-commission-withdrawal-manual-settlement)
 - [ADR 0012：收款资料确认与人工异常处理](/adr/0012-receipt-management-manual-exceptions)
+
+- [ADR 0013：domain、north 的领域依赖隔离](/adr/0013-domain-north-south-ports)
+
+- [ADR 0014：领域公开入口与实际事件处理](/adr/0014-domain-public-entrypoints)

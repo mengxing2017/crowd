@@ -133,7 +133,9 @@ export default defineConfig({
             "text": "ADR 0011：佣金数字、提现申请与人工结算",
             "link": "/adr/0011-commission-withdrawal-manual-settlement"
           },
-          {"text": "ADR 0012：收款资料确认与人工异常处理", "link": "/adr/0012-receipt-management-manual-exceptions"}
+          {"text": "ADR 0012：收款资料确认与人工异常处理", "link": "/adr/0012-receipt-management-manual-exceptions"},
+          {"text": "ADR 0013：领域依赖隔离", "link": "/adr/0013-domain-north-south-ports"},
+          {"text": "ADR 0014：领域入口与实际事件处理", "link": "/adr/0014-domain-public-entrypoints"}
         ]
       },
       {

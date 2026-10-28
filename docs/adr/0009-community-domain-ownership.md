@@ -50,3 +50,7 @@ devbox run -- make test-business
 新增历史文档序列化／旧 Rust 命名空间兼容测试、重复操作审计和收款历史回归、规则权限与审计数据范围回归。既有领域与 HTTP 测试、独立嵌入式 PostgreSQL 集成测试继续覆盖并发、幂等、文件授权、任务审核和批量失败恢复。
 
 2026-10-28 实际验证：Devbox / Rust 1.97.1 下 `make check-backend` 的格式检查、编译、Clippy 和 55 项测试全部通过，模块入口检查覆盖 83 个 `mod.rs`；`make test-business` 在隔离的嵌入式 PostgreSQL 17 上通过 1 项数据库集成测试，未连接外部数据库。`git diff --check` 通过。此次未改动前端或契约包，未执行前端构建和微信真机验证；自动化测试不代替业务验收或官方到账验证。
+
+## 后续依赖隔离
+
+2026-10-28 的后续重构将 State 与分派移至 south 适配层，领域规则改为消费各自端口；当前边界见 [ADR 0013](0013-domain-north-south-ports.md)。以上路径及验证数字是本决策实施时的历史记录。
