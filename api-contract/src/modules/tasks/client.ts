@@ -1,11 +1,13 @@
 import type { Transport } from '../common/types.js'
-import type { Claim, TaskInstance, TaskPage, TaskRules } from './types.js'
+import type { Claim, TaskInstance, TaskPage, TaskRules, TaskEligibility } from './types.js'
 import { createResource } from '../common/resource.js'
 import { validateTasks } from './validation.js'
 
 export function createTasks(transport: Transport) {
   const resource = createResource(transport, validateTasks)
   return {
+    eligibility: (id: string) => resource.read<TaskEligibility>('eligibility', id),
+    eligibilityVerify: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('eligibility_verify', body, key),
     rules: () => resource.read<TaskRules>('task_rules'),
     mine: (filter?: string) => resource.read<TaskPage>('my_tasks', filter),
     queue: (filter?: string) => resource.read<TaskPage>('task_queue', filter),

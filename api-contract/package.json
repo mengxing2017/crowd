@@ -12,7 +12,13 @@
     "./catalog": "./src/modules/catalog/index.ts",
     "./attribution": "./src/modules/attribution/index.ts",
     "./tasks": "./src/modules/tasks/index.ts",
-    "./governance": "./src/modules/governance/index.ts"
+    "./governance": "./src/modules/governance/index.ts",
+    "./receipts": "./src/modules/receipts/index.ts",
+    "./promotion": "./src/modules/promotion/index.ts",
+    "./audit": "./src/modules/audit/index.ts",
+    "./support": "./src/modules/support/index.ts",
+    "./files": "./src/modules/files/index.ts",
+    "./platform": "./src/modules/platform/index.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

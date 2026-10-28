@@ -1,0 +1,1 @@
+export interface AuditRecord { actor: string; action: string; object: string; request_id: string; time: string; result: string; rule_version: string; published_rules?: { id: string; kind: string; version: number }[] }
