@@ -1,8 +1,10 @@
-use crate::platform::domain::{Result, State};
+use super::*;
+use crate::shared::Result;
+use crate::tasks::south::port::DomainPort;
 use serde_json::Value;
 
-impl State {
-    pub fn tasks_command(
+pub trait CommandsRules: DomainPort {
+    fn tasks_command(
         &mut self,
         actor: &str,
         action: &str,
@@ -23,7 +25,7 @@ impl State {
         } else {
             self.execution_command(actor, action, input, generated, now)?
         };
-        crate::commissions::domain::sync_tasks(self, actor, now)?;
+        self.sync_commissions(actor, now)?;
         if action != "evidence_reveal"
             && result["owner"].as_str().is_some_and(|owner| owner != actor)
         {
@@ -37,3 +39,4 @@ impl State {
         Ok(result)
     }
 }
+impl<T: DomainPort + ?Sized> CommandsRules for T {}

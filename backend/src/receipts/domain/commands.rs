@@ -1,8 +1,8 @@
-use crate::platform::domain::State;
+use crate::receipts::south::port::DomainPort;
 use crate::shared::{Failure, Result, check_version, invalid, text};
 use serde_json::{Value, json};
-pub(crate) fn command(
-    state: &mut State,
+pub(crate) fn command<P: DomainPort + ?Sized>(
+    state: &mut P,
     actor: &str,
     action: &str,
     input: &Value,
@@ -41,17 +41,16 @@ pub(crate) fn command(
                     record["policy_id"] = rule["id"].clone();
                 }
             }
-            let u = state.users.get_mut(actor).unwrap();
-            check_version(u.version, input)?;
-            record["version"] = json!(u.version + 1);
+            let version = state.user(actor)?.version;
+            check_version(version, input)?;
+            record["version"] = json!(version + 1);
             let status = record["status"].clone();
-            u.receipts.push(record);
-            u.version += 1;
-            json!({"id":generated,"version":u.version,"status":status,"notice":"资料版本已保存；草稿不能用于申请，格式检查不代表官方验证"})
+            let version = state.append_receipt_event(actor, version, record)?;
+            json!({"id":generated,"version":version,"status":status,"notice":"资料版本已保存；草稿不能用于申请，格式检查不代表官方验证"})
         }
         "receipt_disable" => {
             let id = text(input, "id")?;
-            let u = state.users.get_mut(actor).unwrap();
+            let u = state.user(actor)?;
             if u.receipts.iter().any(|r| r["disables"] == id) {
                 return Ok(json!({"version":u.version}));
             }
@@ -64,10 +63,13 @@ pub(crate) fn command(
             {
                 return Err(Failure("NOT_FOUND", "资料不存在"));
             }
-            u.receipts
-                .push(json!({"id":generated,"disables":id,"status":"disabled","time":time}));
-            u.version += 1;
-            json!({"version":u.version})
+            let version = u.version;
+            let version = state.append_receipt_event(
+                actor,
+                version,
+                json!({"id":generated,"disables":id,"status":"disabled","time":time}),
+            )?;
+            json!({"version":version})
         }
         _ => return Err(Failure("NOT_FOUND", "操作不存在")),
     };
@@ -78,10 +80,13 @@ pub(crate) fn command(
         request,
         time,
     );
-    if let Some(log) = state.audit.last_mut() {
+    {
+        let mut log = serde_json::json!({});
         log["requirements"] = json!(["M17", "M18"]);
         log["object_version"] = result["version"].clone();
         log["declaration_version"] = json!("receipt-self-v1");
+
+        state.annotate_audit(log);
     }
     Ok(result)
 }

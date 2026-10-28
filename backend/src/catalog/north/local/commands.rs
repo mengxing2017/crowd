@@ -1,10 +1,13 @@
-use crate::platform::{
-    domain::{Result, State},
-    north::local::CommandContext,
-};
+use crate::catalog::domain::*;
+use crate::catalog::south::port::CommandContext;
+use crate::catalog::south::port::DomainPort;
+use crate::shared::Result;
 use serde_json::{Value, json};
 
-pub(crate) fn apply(state: &mut State, context: &CommandContext<'_>) -> Result<Value> {
+pub(crate) fn apply<P: DomainPort + ?Sized>(
+    state: &mut P,
+    context: &CommandContext<'_>,
+) -> Result<Value> {
     let CommandContext {
         actor,
         action,
@@ -27,7 +30,8 @@ pub(crate) fn apply(state: &mut State, context: &CommandContext<'_>) -> Result<V
         request,
         now,
     );
-    if let Some(audit) = state.audit.last_mut() {
+    {
+        let mut audit = serde_json::json!({});
         audit["rule_version"] = json!("M05-M07-v1");
         audit["result_ref"] = result["id"].clone();
         audit["requirements"] = json!(match action {
@@ -58,6 +62,8 @@ pub(crate) fn apply(state: &mut State, context: &CommandContext<'_>) -> Result<V
         audit["object_version"] = input["version"].clone();
         audit["release_id"] = input["release_id"].clone();
         audit["policy_version"] = result["policy"]["version"].clone();
+
+        state.annotate_audit(audit);
     }
     Ok(result)
 }

@@ -1,11 +1,11 @@
+use crate::settlements::south::port::DomainPort;
 use crate::{
-    commissions::domain::{cents, require, summary},
-    platform::domain::State,
     shared::{Failure, Result, text},
+    shared::{cents, require},
 };
 use serde_json::{Value, json};
-pub(super) fn review(
-    s: &mut State,
+pub(super) fn review<P: DomainPort + ?Sized>(
+    s: &mut P,
     app: &mut Value,
     actor: &str,
     a: &str,
@@ -26,11 +26,11 @@ pub(super) fn review(
     }
     require(i["approve"].is_boolean(), "请选择审核结论")?;
     if i["approve"] != true {
-        crate::withdrawals::domain::release(s, app, "rejected", actor, text(i, "reason")?, now)?;
+        s.release_withdrawal(app, "rejected", actor, text(i, "reason")?, now)?;
         return Ok(());
     }
     require(
-        !crate::commissions::domain::source_disputed(s, app),
+        !s.commission_source_disputed(app),
         "本单佣金来源存在争议，须先核查，不得通过审核或结算登记",
     )?;
     require(
@@ -39,10 +39,10 @@ pub(super) fn review(
     )?;
     let owner = text(app, "owner")?;
     let id = text(app, "id")?;
-    let sum = summary(s, owner)?;
+    let sum = s.commission_summary(owner)?;
     require(
         sum["consistent"] == true
-            && s.commissions.entries.iter().any(|e| {
+            && s.commissions_entries().iter().any(|e| {
                 e["kind"] == "hold"
                     && e["source"] == id
                     && e["owner"] == owner
@@ -66,8 +66,8 @@ pub(super) fn review(
     }
     Ok(())
 }
-pub(super) fn batch(
-    s: &mut State,
+pub(super) fn batch<P: DomainPort + ?Sized>(
+    s: &mut P,
     actor: &str,
     a: &str,
     i: &Value,
@@ -87,7 +87,7 @@ pub(super) fn batch(
     for e in entries {
         let key = text(e, "id")?;
         require(seen.insert(key), "批次条目重复")?;
-        let app = s.withdrawals.applications.get(key);
+        let app = s.withdrawals_applications().get(key);
         let valid = app.is_some_and(|v| {
             v["status"] == "pending_review"
                 && v["version"] == e["version"]
@@ -108,12 +108,11 @@ pub(super) fn batch(
     require(total <= 9_007_199_254_740_991, "批次总额超出安全范围")?;
     if a == "settlement_batch_preview" {
         let p = json!({"id":id,"kind":"settlement_batch","actor":actor,"entries":entries,"results":results,"count":entries.len(),"amount_cents":total as i64,"at":now,"notice":"仅审核清单，不是转账文件"});
-        s.withdrawals.previews.insert(id.into(), p.clone());
+        s.save_withdrawal_preview(id, p.clone());
         return Ok(p);
     }
     let p = s
-        .withdrawals
-        .previews
+        .withdrawals_previews()
         .get(text(i, "preview_id")?)
         .ok_or(Failure("PREVIEW_REQUIRED", "请先预览批次"))?;
     require(

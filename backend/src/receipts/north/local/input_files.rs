@@ -1,4 +1,4 @@
-use crate::platform::south::adapter::postgres::Repository;
+use crate::receipts::south::port::Repository;
 use crate::shared::Result;
 use serde_json::Value;
 use sqlx::{Postgres, Transaction};

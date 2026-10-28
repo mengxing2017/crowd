@@ -1,13 +1,14 @@
 use super::validation::{array, missing, require};
-use crate::platform::domain::{Failure, Result, State, text};
+use crate::shared::{Failure, Result, text};
+use crate::tasks::south::port::DomainPort;
 use serde_json::Value;
 
-impl State {
-    pub fn tasks_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
+pub trait AccessRules: DomainPort {
+    fn tasks_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
         require(self.user(actor)?.status == "active", "账号当前不可处理任务")?;
         let id = input["id"].as_str().unwrap_or("platform");
         let target = self
-            .tasks
+            .tasks()
             .instances
             .get(id)
             .and_then(|v| v["product_id"].as_str())
@@ -28,7 +29,7 @@ impl State {
             }
             "evidence_reveal" => {
                 text(input, "reason")?;
-                let t = self.tasks.instances.get(id).ok_or(missing())?;
+                let t = self.tasks().instances.get(id).ok_or(missing())?;
                 let assigned = self.authorize(actor, "task_reviewer", target).is_ok()
                     && t["reviewer"] == actor
                     && matches!(
@@ -43,7 +44,7 @@ impl State {
             "review_batch_preview" | "review_batch" => {
                 for entry in array(input, "entries")? {
                     let task = self
-                        .tasks
+                        .tasks()
                         .instances
                         .get(text(entry, "id")?)
                         .ok_or(missing())?;
@@ -54,7 +55,7 @@ impl State {
             _ => {
                 self.authorize(actor, "user", actor)?;
                 require(
-                    self.tasks
+                    self.tasks()
                         .instances
                         .get(id)
                         .is_some_and(|v| v["owner"] == actor),
@@ -64,3 +65,4 @@ impl State {
         }
     }
 }
+impl<T: DomainPort + ?Sized> AccessRules for T {}

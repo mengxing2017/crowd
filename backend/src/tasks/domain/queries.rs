@@ -1,9 +1,10 @@
 use super::validation::{missing, require};
-use crate::platform::domain::{Result, State, invalid, text};
+use crate::shared::{Result, invalid, text};
+use crate::tasks::south::port::DomainPort;
 use serde_json::{Value, json};
 
-impl State {
-    pub fn tasks_read(&self, actor: &str, section: &str, target: &str, now: i64) -> Result<Value> {
+pub trait QueriesRules: DomainPort {
+    fn tasks_read(&self, actor: &str, section: &str, target: &str, now: i64) -> Result<Value> {
         require(self.user(actor)?.status == "active", "账号不可查询任务")?;
         match section {
             "task_rules" => {
@@ -16,7 +17,7 @@ impl State {
                     "无规则管理权限",
                 )?;
                 Ok(
-                    json!({"prices":self.tasks.prices.values().collect::<Vec<_>>(),"templates":self.tasks.templates.values().collect::<Vec<_>>(),"server_time":now}),
+                    json!({"prices":self.tasks().prices.values().collect::<Vec<_>>(),"templates":self.tasks().templates.values().collect::<Vec<_>>(),"server_time":now}),
                 )
             }
             "my_tasks" | "task_queue" => {
@@ -37,7 +38,7 @@ impl State {
                     )?;
                 }
                 let mut items: Vec<Value> = self
-                    .tasks
+                    .tasks()
                     .instances
                     .values()
                     .filter(|t| {
@@ -109,7 +110,7 @@ impl State {
                 Ok(json!({"items":items,"next_cursor":cursor,"server_time":now}))
             }
             "task_detail" => {
-                let t = self.tasks.instances.get(target).ok_or(missing())?;
+                let t = self.tasks().instances.get(target).ok_or(missing())?;
                 if t["owner"] != actor {
                     self.authorize(actor, "task_reviewer", text(t, "product_id")?)
                         .or_else(|_| self.authorize(actor, "verifier", text(t, "product_id")?))?;
@@ -120,7 +121,7 @@ impl State {
                         safe["receipt"]["evidence"] = Value::Null;
                     }
                     safe["submissions"] = Value::Null;
-                    safe["corrections"]=json!(self.tasks.proposals.values().filter(|p|p["task_id"]==target).map(|p|json!({"id":p["id"],"kind":p["kind"],"status":p["status"],"actor":p["actor"],"reason":p["reason"]})).collect::<Vec<_>>());
+                    safe["corrections"]=json!(self.tasks().proposals.values().filter(|p|p["task_id"]==target).map(|p|json!({"id":p["id"],"kind":p["kind"],"status":p["status"],"actor":p["actor"],"reason":p["reason"]})).collect::<Vec<_>>());
                     return Ok(safe);
                 }
                 Ok(t.clone())
@@ -128,10 +129,11 @@ impl State {
             "task_changes" => {
                 self.authorize(actor, "auditor", "platform")?;
                 Ok(
-                    json!({"confirmations":self.tasks.confirmations,"changes":self.tasks.changes,"inspections":self.tasks.inspections,"proposals":self.tasks.proposals}),
+                    json!({"confirmations":self.tasks().confirmations,"changes":self.tasks().changes,"inspections":self.tasks().inspections,"proposals":self.tasks().proposals}),
                 )
             }
             _ => Err(missing()),
         }
     }
 }
+impl<T: DomainPort + ?Sized> QueriesRules for T {}

@@ -1,5 +1,6 @@
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::Repository;
+use crate::platform::south::port::AuditWriter;
+use crate::platform::south::port::Repository;
+use crate::shared::{Failure, Result};
 use serde_json::{Value, json};
 
 #[derive(Clone)]
@@ -52,14 +53,17 @@ impl ExecuteCommand {
                     request,
                     &now,
                 );
-                if let Some(log) = state.audit.last_mut() {
+                {
+                    let mut log = serde_json::json!({});
                     log["reason"] = input["reason"].clone();
+
+                    state.annotate_audit(log);
                 }
                 Repository::save(&mut tx, &state).await?;
                 Repository::commit(tx).await?;
                 return Ok(result);
             }
-            if crate::tasks::north::local::audit_replay(
+            if crate::platform::south::port::audit_replay(
                 &mut tx, &mut state, &actor, action, input, request,
             )
             .await?
@@ -69,20 +73,24 @@ impl ExecuteCommand {
             }
             return Ok(result);
         }
-        super::input_files::validate(&mut tx, &state, &actor, action, input).await?;
+        crate::platform::south::port::input_files::validate(&mut tx, &state, &actor, action, input)
+            .await?;
         let epoch = Repository::epoch(&mut tx).await?;
         let expired = state.expire_tasks(epoch);
         let generated = Repository::entropy(&mut tx).await?;
         let now = Repository::time(&mut tx).await?;
         if expired > 0 {
             state.log("task-worker", "task_expire", "platform", request, &now);
-            if let Some(audit) = state.audit.last_mut() {
+            {
+                let mut audit = serde_json::json!({});
                 audit["rule_version"] = json!("M08-M12-v1");
                 audit["expired_tasks"] = json!(expired);
+
+                state.annotate_audit(audit);
             }
         }
         let before = state.clone();
-        let context = super::command_context::CommandContext {
+        let context = crate::shared::CommandContext {
             actor: &actor,
             action,
             input,
@@ -91,7 +99,10 @@ impl ExecuteCommand {
             now: &now,
             epoch,
         };
-        let result = super::command_dispatch::apply(&mut tx, &mut state, token, &context).await;
+        let result = crate::platform::south::port::command_dispatch::apply(
+            &mut tx, &mut state, token, &context,
+        )
+        .await;
         let result = match result {
             Ok(value) => value,
             Err(failure) => {

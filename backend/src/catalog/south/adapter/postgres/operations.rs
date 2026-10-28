@@ -1,4 +1,4 @@
-use crate::platform::south::adapter::postgres::{Repository, database};
+use crate::platform::south::port::{Repository, database};
 use crate::shared::{Failure, Result};
 
 use sqlx::{Postgres, Transaction};

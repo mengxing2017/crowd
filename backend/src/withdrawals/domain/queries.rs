@@ -1,7 +1,5 @@
-use crate::{
-    platform::domain::State,
-    shared::{Failure, Result, text},
-};
+use crate::shared::{Failure, Result, text};
+use crate::withdrawals::south::port::DomainPort;
 use serde_json::{Value, json};
 pub(crate) fn mask(mut a: Value) -> Value {
     if let Some(r) = a["receipt_snapshot"].as_object_mut() {
@@ -14,13 +12,19 @@ pub(crate) fn mask(mut a: Value) -> Value {
     }
     a
 }
-pub fn read(s: &State, actor: &str, section: &str, target: &str, now: i64) -> Result<Value> {
+pub fn read<P: DomainPort + ?Sized>(
+    s: &P,
+    actor: &str,
+    section: &str,
+    target: &str,
+    now: i64,
+) -> Result<Value> {
     s.user(actor)?;
     if section == "withdrawal_rules" {
         if s.authorize(actor, "rule_manager", "platform").is_ok()
             || s.authorize(actor, "verifier", "platform").is_ok()
         {
-            return Ok(json!(s.withdrawals.rules));
+            return Ok(json!(s.withdrawals().rules));
         }
         return super::active_rule(s);
     }
@@ -30,7 +34,7 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str, now: i64) -> Re
     }
     if section == "withdrawal_detail" {
         let a = s
-            .withdrawals
+            .withdrawals()
             .applications
             .get(target)
             .ok_or(Failure("NOT_FOUND", "申请不存在"))?;
@@ -38,7 +42,7 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str, now: i64) -> Re
             queue_access(s, actor, text(a, "owner")?)?;
         }
         let mut safe = mask(a.clone());
-        safe["source_disputed"] = json!(crate::commissions::domain::source_disputed(s, a));
+        safe["source_disputed"] = json!(s.commission_source_disputed(a));
         return Ok(safe);
     }
     if !own {
@@ -56,7 +60,7 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str, now: i64) -> Re
         }
     }
     let rows: Vec<_> = s
-        .withdrawals
+        .withdrawals()
         .applications
         .values()
         .filter(|a| {
@@ -67,7 +71,7 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str, now: i64) -> Re
             }
         })
         .map(|a| {
-            let source_disputed = crate::commissions::domain::source_disputed(s, a);
+            let source_disputed = s.commission_source_disputed(a);
             let mut a = mask(a.clone());
             a["source_disputed"] = json!(source_disputed);
             let seconds = a["rule"]["reminder_seconds"].as_i64().unwrap_or(0);
@@ -84,7 +88,7 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str, now: i64) -> Re
         .collect();
     Ok(json!(rows))
 }
-pub(crate) fn queue_access(s: &State, actor: &str, target: &str) -> Result<()> {
+pub(crate) fn queue_access<P: DomainPort + ?Sized>(s: &P, actor: &str, target: &str) -> Result<()> {
     if s.authorize(actor, "settlement_reviewer", target).is_err()
         && s.authorize(actor, "manual_handler", target).is_err()
         && s.authorize(actor, "verifier", target).is_err()

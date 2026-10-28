@@ -1,8 +1,6 @@
 use super::{append, cents, number, require, summary};
-use crate::{
-    platform::domain::State,
-    shared::{Failure, Result, text},
-};
+use crate::commissions::south::port::DomainPort;
+use crate::shared::{Failure, Result, text};
 use serde_json::{Value, json};
 pub fn is_command(a: &str) -> bool {
     matches!(
@@ -13,16 +11,16 @@ pub fn is_command(a: &str) -> bool {
             | "commission_dispute_resolve"
     )
 }
-pub fn access(s: &State, actor: &str, a: &str, i: &Value) -> Result<()> {
+pub fn access<P: DomainPort + ?Sized>(s: &P, actor: &str, a: &str, i: &Value) -> Result<()> {
     let owner = if a == "commission_adjust_review" {
-        s.commissions
+        s.commissions()
             .proposals
             .get(text(i, "id")?)
             .ok_or(Failure("NOT_FOUND", "调整单不存在"))?["owner"]
             .as_str()
             .unwrap_or("")
     } else if a == "commission_dispute_resolve" {
-        s.commissions
+        s.commissions()
             .disputes
             .get(text(i, "id")?)
             .ok_or(Failure("NOT_FOUND", "争议不存在"))?["owner"]
@@ -41,8 +39,8 @@ pub fn access(s: &State, actor: &str, a: &str, i: &Value) -> Result<()> {
         owner,
     )
 }
-pub fn command(
-    s: &mut State,
+pub fn command<P: DomainPort + ?Sized>(
+    s: &mut P,
     actor: &str,
     a: &str,
     i: &Value,
@@ -60,7 +58,7 @@ pub fn command(
             let source = text(i, "source")?;
             let business = text(i, "business_key")?;
             require(
-                !s.commissions
+                !s.commissions()
                     .proposals
                     .values()
                     .any(|p| p["business_key"] == business),
@@ -75,13 +73,13 @@ pub fn command(
                 )?;
             }
             let p = json!({"id":id,"owner":owner,"new_owner":i["new_owner"],"amount_cents":amount,"source":source,"business_key":business,"reason":reason,"actor":actor,"at":now,"status":"pending"});
-            s.commissions.proposals.insert(id.into(), p.clone());
+            s.commissions_mut().proposals.insert(id.into(), p.clone());
             Ok(p)
         }
         "commission_adjust_review" => {
             let key = text(i, "id")?;
             let mut p = s
-                .commissions
+                .commissions()
                 .proposals
                 .get(key)
                 .cloned()
@@ -141,7 +139,7 @@ pub fn command(
             p["reviewer"] = json!(actor);
             p["review_reason"] = json!(reason);
             p["reviewed_at"] = json!(now);
-            s.commissions.proposals.insert(key.into(), p.clone());
+            s.commissions_mut().proposals.insert(key.into(), p.clone());
             Ok(p)
         }
         "commission_dispute" => {
@@ -151,7 +149,7 @@ pub fn command(
             let sum = summary(s, owner)?;
             require(sum["consistent"] == true, "数字异常，请先核查")?;
             let entitlement: i128 = s
-                .commissions
+                .commissions()
                 .entries
                 .iter()
                 .filter(|e| e["owner"] == owner && e["source"] == source)
@@ -165,7 +163,7 @@ pub fn command(
                 .sum();
             require(
                 i128::from(n) <= entitlement
-                    && !s.commissions.disputes.values().any(|d| {
+                    && !s.commissions().disputes.values().any(|d| {
                         d["owner"] == owner && d["source"] == source && d["status"] == "open"
                     }),
                 "争议范围超出来源数字或该来源已有未完成核查",
@@ -188,13 +186,13 @@ pub fn command(
                 now,
                 d.clone(),
             )?;
-            s.commissions.disputes.insert(id.into(), d.clone());
+            s.commissions_mut().disputes.insert(id.into(), d.clone());
             Ok(d)
         }
         "commission_dispute_resolve" => {
             let key = text(i, "id")?;
             let mut d = s
-                .commissions
+                .commissions()
                 .disputes
                 .get(key)
                 .cloned()
@@ -218,7 +216,7 @@ pub fn command(
             d["status"] = json!("resolved");
             d["reviewer"] = json!(actor);
             d["resolution"] = json!(reason);
-            s.commissions.disputes.insert(key.into(), d.clone());
+            s.commissions_mut().disputes.insert(key.into(), d.clone());
             Ok(d)
         }
         _ => Err(Failure("NOT_FOUND", "佣金操作不存在")),

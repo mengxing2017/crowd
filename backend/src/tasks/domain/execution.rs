@@ -1,5 +1,6 @@
 use super::validation::{array, conflict, missing, next_time, number, positive, require, version};
-use crate::platform::domain::{Failure, Result, State, invalid, text};
+use crate::shared::{Failure, Result, invalid, text};
+use crate::tasks::south::port::DomainPort;
 use serde_json::{Value, json};
 
 fn editable(t: &Value, now: i64) -> Result<()> {
@@ -21,7 +22,7 @@ fn order_key(field: &Value, value: &str) -> String {
     ])
     .to_string()
 }
-impl State {
+pub trait ExecutionRules: DomainPort {
     fn validate_evidence(&self, t: &Value, e: &Value, complete: bool) -> Result<()> {
         let object = e["fields"]
             .as_object()
@@ -56,7 +57,7 @@ impl State {
                     )?;
                     for file in values {
                         let attachment = self
-                            .tasks
+                            .tasks()
                             .attachments
                             .get(file.as_str().ok_or(invalid("图片文件编号无效"))?)
                             .ok_or(Failure("FORBIDDEN", "证据图片未授权"))?;
@@ -90,7 +91,7 @@ impl State {
                     )?;
                     let key = order_key(field, value);
                     require(
-                        self.tasks
+                        self.tasks()
                             .orders
                             .get(&key)
                             .is_none_or(|id| t["id"] == id.as_str()),
@@ -132,7 +133,7 @@ impl State {
         }
         Ok(())
     }
-    pub(super) fn execution_command(
+    fn execution_command(
         &mut self,
         actor: &str,
         action: &str,
@@ -141,7 +142,7 @@ impl State {
         now: i64,
     ) -> Result<Value> {
         let id = text(input, "id")?;
-        let mut t = self.tasks.instances.get(id).cloned().ok_or(missing())?;
+        let mut t = self.tasks().instances.get(id).cloned().ok_or(missing())?;
         if input["version"].as_u64() != Some(version(&t)) {
             return Err(conflict());
         }
@@ -283,7 +284,9 @@ impl State {
                     .filter(|f| f["kind"] == "order")
                 {
                     if let Some(value) = t["draft"]["fields"][text(field, "id")?].as_str() {
-                        self.tasks.orders.insert(order_key(field, value), id.into());
+                        self.tasks_mut()
+                            .orders
+                            .insert(order_key(field, value), id.into());
                     }
                 }
                 let n = array(&t, "submissions")?.len() + 1;
@@ -324,11 +327,9 @@ impl State {
         t["events"].as_array_mut().unwrap().push(
             json!({"action":action,"actor":actor,"at":now,"reason":input["reason"],"version":v}),
         );
-        self.tasks.instances.insert(id.into(), t.clone());
-        if let Some(c) = self.catalog.claims.get_mut(id) {
-            c["status"] = t["status"].clone();
-            c["reservation_released"] = t["reservation_released"].clone();
-        }
+        self.tasks_mut().instances.insert(id.into(), t.clone());
+        self.update_claim_progress(id, t["status"].clone(), t["reservation_released"].clone());
         Ok(t)
     }
 }
+impl<T: DomainPort + ?Sized> ExecutionRules for T {}

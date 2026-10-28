@@ -1,12 +1,12 @@
+use crate::settlements::south::port::DomainPort;
 use crate::{
-    commissions::domain::{append, cents, number, require},
-    platform::domain::State,
     shared::{Result, text},
+    shared::{cents, number, require},
 };
 use serde_json::{Value, json};
-fn settle(s: &mut State, app: &mut Value, actor: &str, now: i64) -> Result<()> {
+fn settle<P: DomainPort + ?Sized>(s: &mut P, app: &mut Value, actor: &str, now: i64) -> Result<()> {
     require(
-        !crate::commissions::domain::source_disputed(s, app),
+        !s.commission_source_disputed(app),
         "本单佣金来源存在争议，须先核查，不得通过审核或结算登记",
     )?;
     require(
@@ -16,8 +16,7 @@ fn settle(s: &mut State, app: &mut Value, actor: &str, now: i64) -> Result<()> {
         "资料、登记错误或待复核更正尚未解决，不可转已登记结算",
     )?;
     let id = text(app, "id")?;
-    append(
-        s,
+    s.ledger_append(
         &format!("withdrawal:{id}:settled"),
         text(app, "owner")?,
         "settled",
@@ -30,8 +29,8 @@ fn settle(s: &mut State, app: &mut Value, actor: &str, now: i64) -> Result<()> {
     app["status"] = json!("settled");
     Ok(())
 }
-pub(super) fn register(
-    s: &mut State,
+pub(super) fn register<P: DomainPort + ?Sized>(
+    s: &mut P,
     app: &mut Value,
     actor: &str,
     a: &str,
@@ -74,7 +73,7 @@ pub(super) fn register(
                 text(i, "reference_note")?;
             }
             app["registration"] = json!({"id":id,"actor":actor,"amount_cents":n,"method":app["receipt_snapshot"]["method"],"receipt_id":app["receipt_snapshot"]["id"],"paid_at":paid,"recorded_at":now,"voucher_file_id":voucher,"voucher_owner":actor,"result":"reported_paid","reason":i["reason"],"reference_note":i["reference_note"],"official_verified":false});
-            if crate::commissions::domain::source_disputed(s, app)
+            if s.commission_source_disputed(app)
                 || i["voucher_matches"] != true
                 || n != cents(app, "amount_cents")?
             {
@@ -142,14 +141,7 @@ pub(super) fn register(
                         i["confirmed_unpaid"] == true && i["processing_stopped"] == true,
                         "须独立确认未付款且处理停止",
                     )?;
-                    crate::withdrawals::domain::release(
-                        s,
-                        app,
-                        "rejected",
-                        actor,
-                        text(i, "reason")?,
-                        now,
-                    )?;
+                    s.release_withdrawal(app, "rejected", actor, text(i, "reason")?, now)?;
                 } else {
                     app["post_settlement_dispute"] = json!(true);
                 }

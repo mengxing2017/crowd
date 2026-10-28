@@ -1,5 +1,6 @@
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::Repository;
+use crate::shared::{Failure, Result};
+use crate::tasks::south::port::AuditWriter;
+use crate::tasks::south::port::Repository;
 use serde_json::json;
 
 #[derive(Clone)]
@@ -22,7 +23,7 @@ impl ReadEvidenceFile {
         let mut tx = self.repo.begin().await?;
         let actor = Repository::authenticate(&mut tx, token).await?;
         let mut state = Repository::load(&mut tx).await?;
-        crate::platform::domain::text(&json!({"reason":reason}), "reason")?;
+        crate::shared::text(&json!({"reason":reason}), "reason")?;
         let a = state
             .tasks
             .attachments
@@ -66,8 +67,11 @@ impl ReadEvidenceFile {
         let result = Repository::file(&mut tx, id, &owner).await?;
         let now = Repository::time(&mut tx).await?;
         state.log(&actor, "evidence_file_view", id, request, &now);
-        if let Some(log) = state.audit.last_mut() {
+        {
+            let mut log = serde_json::json!({});
             log["reason"] = json!(reason);
+
+            state.annotate_audit(log);
         }
         Repository::save(&mut tx, &state).await?;
         Repository::commit(tx).await?;

@@ -1,9 +1,10 @@
+use super::BehaviorRules;
 use super::Code;
-use crate::platform::domain::State;
+use crate::promotion::south::port::DomainPort;
 use crate::shared::{Failure, Result, check_version, text};
 use serde_json::{Value, json};
-pub(crate) fn command(
-    state: &mut State,
+pub(crate) fn command<P: DomainPort + ?Sized>(
+    state: &mut P,
     actor: &str,
     action: &str,
     input: &Value,
@@ -27,7 +28,7 @@ pub(crate) fn command(
                     "推广功能受限，请联系客服申诉",
                 ));
             }
-            if let Some((id, _)) = state.codes.iter().find(|(_, c)| {
+            if let Some((id, _)) = state.codes().iter().find(|(_, c)| {
                 c.owner == actor
                     && c.active
                     && c.product.as_deref() == product
@@ -35,10 +36,10 @@ pub(crate) fn command(
             }) {
                 return Ok(json!({"id":id}));
             }
-            if state.codes.contains_key(generated) {
+            if state.codes().contains_key(generated) {
                 return Err(Failure("CODE_COLLISION", "推广码冲突，请重试"));
             }
-            state.codes.insert(
+            state.codes_mut().insert(
                 generated.into(),
                 Code {
                     owner: actor.into(),
@@ -55,7 +56,7 @@ pub(crate) fn command(
             let reason = text(input, "reason")?;
             let approval = text(input, "approval")?;
             let c = state
-                .codes
+                .codes()
                 .get(id)
                 .ok_or(Failure("NOT_FOUND", "推广码不存在"))?
                 .clone();
@@ -64,11 +65,11 @@ pub(crate) fn command(
                 return Err(Failure("VERSION_CONFLICT", "原推广码已经撤销"));
             }
             check_version(c.version, input)?;
-            if state.codes.contains_key(generated) {
+            if state.codes().contains_key(generated) {
                 return Err(Failure("CODE_COLLISION", "推广码冲突，请重试"));
             }
-            state.codes.get_mut(id).unwrap().active = false;
-            state.codes.insert(
+            state.codes_mut().get_mut(id).unwrap().active = false;
+            state.codes_mut().insert(
                 generated.into(),
                 Code {
                     version: c.version + 1,
@@ -76,9 +77,9 @@ pub(crate) fn command(
                 },
             );
             state.log(actor, "REQ-04-008", id, request, time);
-            state.audit.last_mut().unwrap()["reason"] = json!(reason);
-            state.audit.last_mut().unwrap()["approval"] = json!(approval);
-            state.audit.last_mut().unwrap()["approved_by"] = json!(actor);
+            state.annotate_audit(serde_json::json!({"reason":json!(reason)}));
+            state.annotate_audit(serde_json::json!({"approval":json!(approval)}));
+            state.annotate_audit(serde_json::json!({"approved_by":json!(actor)}));
             json!({"id":generated})
         }
         _ => return Err(Failure("NOT_FOUND", "操作不存在")),

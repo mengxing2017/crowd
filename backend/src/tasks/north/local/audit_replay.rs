@@ -1,13 +1,12 @@
-use crate::platform::{
-    domain::{Result, State},
-    south::adapter::postgres::Repository,
-};
+use crate::shared::Result;
+use crate::tasks::south::port::DomainPort;
+use crate::tasks::south::port::Repository;
 use serde_json::Value;
 use sqlx::{Postgres, Transaction};
 
-pub(crate) async fn audit_replay(
+pub(crate) async fn audit_replay<P: DomainPort + ?Sized>(
     tx: &mut Transaction<'_, Postgres>,
-    state: &mut State,
+    state: &mut P,
     actor: &str,
     action: &str,
     input: &Value,
@@ -24,8 +23,11 @@ pub(crate) async fn audit_replay(
         request,
         &now,
     );
-    if let Some(log) = state.audit.last_mut() {
+    {
+        let mut log = serde_json::json!({});
         log["reason"] = input["reason"].clone();
+
+        state.annotate_audit(log);
     }
     Ok(true)
 }

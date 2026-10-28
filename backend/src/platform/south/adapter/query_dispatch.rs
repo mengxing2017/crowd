@@ -1,7 +1,7 @@
 use crate::platform::domain::{Result, State};
 use serde_json::Value;
 
-pub(super) fn read(
+pub(crate) fn read(
     state: &mut State,
     actor: &str,
     section: &str,
@@ -18,8 +18,12 @@ pub(super) fn read(
             | "commission_proposals"
             | "commission_disputes"
     ) {
-        let result =
-            crate::commissions::domain::read(state, actor, section, target.unwrap_or(actor));
+        let result = crate::commissions::south::port::rules::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+        );
         if result.is_ok() {
             state.log(actor, section, target.unwrap_or(actor), request, now);
         }
@@ -28,19 +32,24 @@ pub(super) fn read(
         section,
         "withdrawal_rules" | "my_withdrawals" | "withdrawal_queue" | "withdrawal_detail"
     ) {
-        let result =
-            crate::withdrawals::domain::read(state, actor, section, target.unwrap_or(actor), epoch);
+        let result = crate::withdrawals::south::port::rules::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+            epoch,
+        );
         if result.is_ok() {
             state.log(actor, section, target.unwrap_or(actor), request, now);
         }
         result
-    } else if crate::tasks::domain::is_read(section) {
+    } else if crate::tasks::south::port::rules::is_read(section) {
         let result = state.tasks_read(actor, section, target.unwrap_or(actor), epoch);
         if result.is_ok() {
             state.log(actor, section, target.unwrap_or(actor), request, now);
         }
         result
-    } else if crate::catalog::domain::is_read(section) {
+    } else if crate::catalog::south::port::rules::is_read(section) {
         let result = state.catalog_read(actor, section, target.unwrap_or(actor), epoch);
         if result.is_ok() {
             state.log(actor, section, target.unwrap_or(actor), request, now);

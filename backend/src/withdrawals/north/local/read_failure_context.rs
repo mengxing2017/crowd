@@ -1,4 +1,4 @@
-use crate::{platform::south::adapter::postgres::Repository, shared::Result};
+use crate::{shared::Result, withdrawals::south::port::Repository};
 use serde_json::{Value, json};
 #[derive(Clone)]
 pub struct ReadWithdrawalFailureContext {
@@ -12,8 +12,7 @@ impl ReadWithdrawalFailureContext {
         let mut tx = self.repo.begin().await?;
         let actor = Repository::authenticate(&mut tx, token).await?;
         let mut state = Repository::load(&mut tx).await?;
-        let summary =
-            crate::commissions::domain::read(&state, &actor, "commission_summary", &actor)?;
+        let summary = crate::withdrawals::south::port::commission_summary(&state, &actor)?;
         let now = Repository::epoch(&mut tx).await?;
         let apps = crate::withdrawals::domain::read(&state, &actor, "my_withdrawals", &actor, now)?;
         state.log(

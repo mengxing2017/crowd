@@ -1,4 +1,4 @@
-use crate::platform::south::adapter::postgres::{Repository, database};
+use crate::platform::south::port::{Repository, database};
 use crate::promotion::domain::Code;
 use crate::shared::{Failure, Result};
 
@@ -59,7 +59,7 @@ impl Repository {
 impl Repository {
     pub(crate) async fn save_code_ownership(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        state: &crate::platform::domain::State,
+        state: &crate::platform::south::port::rules::State,
     ) -> Result<()> {
         let inactive: Vec<String> = state
             .codes

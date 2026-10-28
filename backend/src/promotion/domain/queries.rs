@@ -1,11 +1,16 @@
-use crate::platform::domain::State;
+use crate::promotion::south::port::DomainPort;
 use crate::shared::{Failure, Result};
 use serde_json::{Value, json};
-pub(crate) fn read(state: &State, actor: &str, section: &str, target: &str) -> Result<Value> {
+pub(crate) fn read<P: DomainPort + ?Sized>(
+    state: &P,
+    actor: &str,
+    section: &str,
+    target: &str,
+) -> Result<Value> {
     match section {
         "codes" => Ok(json!(
             state
-                .codes
+                .codes()
                 .iter()
                 .filter(|(_, c)| c.owner == actor)
                 .map(|(id, c)| json!({"id":id,"code":c}))
@@ -15,7 +20,7 @@ pub(crate) fn read(state: &State, actor: &str, section: &str, target: &str) -> R
             state.authorize(actor, "promotion_manager", target)?;
             Ok(json!(
                 state
-                    .codes
+                    .codes()
                     .iter()
                     .filter(|(_, c)| c.owner == target)
                     .map(|(id, c)| json!({"id":id,"code":c}))

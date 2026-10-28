@@ -1,0 +1,2 @@
+mod record_verified_completion;
+pub use record_verified_completion::RecordVerifiedCompletion;

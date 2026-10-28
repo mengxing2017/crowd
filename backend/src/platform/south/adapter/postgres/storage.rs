@@ -24,7 +24,7 @@ impl Repository {
                 .map_err(database)?;
         let mut state: State = serde_json::from_value(v)
             .map_err(|_| Failure("SERVICE_UNAVAILABLE", "业务记录暂不可读取"))?;
-        crate::commissions::domain::sync_tasks(
+        crate::commissions::south::port::rules::sync_tasks(
             &mut state,
             "commission-reconciliation",
             Self::epoch(tx).await?,

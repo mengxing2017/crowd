@@ -1,6 +1,6 @@
 use crate::identity::south::port::IdentityProvider;
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::Repository;
+use crate::identity::south::port::Repository;
+use crate::shared::{Failure, Result};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -19,7 +19,7 @@ impl WechatLogin {
         input: &Value,
         request: &str,
     ) -> Result<Value> {
-        let code = crate::platform::domain::text(input, "code")?;
+        let code = crate::shared::text(input, "code")?;
         let platform = provider.exchange(code).await.map_err(|_| {
             Failure(
                 "IDENTITY_UNAVAILABLE",

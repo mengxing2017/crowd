@@ -1,5 +1,6 @@
-use crate::platform::domain::Result;
-use crate::platform::south::adapter::postgres::Repository;
+use crate::catalog::south::port::AuditWriter;
+use crate::catalog::south::port::Repository;
+use crate::shared::Result;
 use serde_json::json;
 
 #[derive(Clone)]
@@ -28,9 +29,12 @@ impl ReconcileCatalog {
                 "lifecycle-worker",
                 &time,
             );
-            if let Some(audit) = state.audit.last_mut() {
+            {
+                let mut audit = serde_json::json!({});
                 audit["rule_version"] = json!("M05-M12-v1");
                 audit["expired_tasks"] = json!(expired);
+
+                state.annotate_audit(audit);
             }
             Repository::save(&mut tx, &state).await?;
         }

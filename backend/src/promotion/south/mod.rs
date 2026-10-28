@@ -1,1 +1,3 @@
-pub mod adapter;
+pub(in crate::promotion) mod adapter;
+
+pub mod port;

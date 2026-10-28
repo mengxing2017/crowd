@@ -1,14 +1,15 @@
-use crate::platform::domain::Result;
-use crate::platform::domain::text;
-use crate::platform::south::adapter::postgres::Repository;
+use crate::catalog::south::port::DomainPort;
+use crate::catalog::south::port::Repository;
+use crate::shared::Result;
+use crate::shared::text;
 use serde_json::Value;
 
 pub struct ValidateProductFiles;
 
 impl ValidateProductFiles {
-    pub async fn execute(
+    pub async fn execute<P: DomainPort + ?Sized>(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        state: &crate::platform::domain::State,
+        state: &P,
         actor: &str,
         action: &str,
         input: &Value,
@@ -23,7 +24,7 @@ impl ValidateProductFiles {
                 let id = text(image, "file_id")?;
                 // Reusing an existing product image is allowed only within the already-authorized product.
                 let prior = state
-                    .catalog
+                    .catalog()
                     .products
                     .get(input["id"].as_str().unwrap_or(""));
                 let linked = prior.is_some_and(|p| {

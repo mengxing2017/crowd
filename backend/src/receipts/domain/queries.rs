@@ -1,8 +1,13 @@
 use super::masking::mask_receipts;
-use crate::platform::domain::State;
+use crate::receipts::south::port::DomainPort;
 use crate::shared::{Failure, Result};
 use serde_json::{Value, json};
-pub(crate) fn read(state: &State, actor: &str, section: &str, target: &str) -> Result<Value> {
+pub(crate) fn read<P: DomainPort + ?Sized>(
+    state: &P,
+    actor: &str,
+    section: &str,
+    target: &str,
+) -> Result<Value> {
     match section {
         "receipts" => {
             if target != actor {

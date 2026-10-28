@@ -47,7 +47,7 @@ fn application_use_cases_have_separate_owners_and_single_entrypoints() {
             );
             if definitions == 1 {
                 assert_eq!(
-                    text.matches("pub async fn execute(").count(),
+                    text.matches("pub async fn execute").count(),
                     1,
                     "{}",
                     path.display()

@@ -1,9 +1,11 @@
 use super::validation::{conflict, not_found, num, public_category, strings, version};
-use crate::platform::domain::{Failure, Result, State, check_version, invalid, text};
+use super::*;
+use crate::catalog::south::port::DomainPort;
+use crate::shared::{Failure, Result, check_version, invalid, text};
 use serde_json::{Value, json};
 
-impl State {
-    pub fn catalog_command(
+pub trait CommandsRules: DomainPort {
+    fn catalog_command(
         &mut self,
         actor: &str,
         action: &str,
@@ -22,7 +24,7 @@ impl State {
                     return Err(invalid("需明确分类启停状态"));
                 }
                 let old = self
-                    .catalog
+                    .catalog()
                     .categories
                     .get(&id)
                     .cloned()
@@ -38,40 +40,45 @@ impl State {
                 v["history"] = json!(history);
                 v["id"] = json!(id);
                 v["version"] = json!(version(&old) + 1);
-                self.catalog.categories.insert(id.clone(), v);
-                self.catalog.revision += 1;
+                self.catalog_mut().categories.insert(id.clone(), v);
+                self.catalog_mut().revision += 1;
                 json!({"id":id,"version":version(&old)+1})
             }
             "category_migrate" => {
                 let to = text(input, "to_category")?;
                 text(input, "reason")?;
                 if self
-                    .catalog
+                    .catalog()
                     .categories
                     .get(to)
                     .is_none_or(|c| c["enabled"] != true)
                 {
                     return Err(invalid("目标分类不存在或已停用"));
                 }
-                let category = self.catalog.categories.get(&id).ok_or(not_found())?;
-                check_version(version(category), input)?;
+                let category = self
+                    .catalog()
+                    .categories
+                    .get(&id)
+                    .cloned()
+                    .ok_or(not_found())?;
+                check_version(version(&category), input)?;
                 // Only drafts move. Published versions and historical claims are immutable.
-                for p in self.catalog.products.values_mut() {
+                for p in self.catalog_mut().products.values_mut() {
                     if p["draft"]["category"] == id {
                         p["draft"]["category"] = json!(to);
                         p["version"] = json!(version(p) + 1);
                         p["editor"] = json!(actor);
                     }
                 }
-                self.catalog.categories.get_mut(&id).unwrap()["version"] =
-                    json!(version(category) + 1);
+                self.catalog_mut().categories.get_mut(&id).unwrap()["version"] =
+                    json!(version(&category) + 1);
                 json!({"status":"drafts_migrated","notice":"已发布版本需重新提交审核"})
             }
             "product_save" => {
                 if !input["content"].is_object() {
                     return Err(invalid("产品草稿必须为对象"));
                 }
-                let p=self.catalog.products.entry(id.clone()).or_insert(json!({"id":id,"version":0,"draft":{},"releases":[],"archived":false,"offline":true}));
+                let p=self.catalog_mut().products.entry(id.clone()).or_insert(json!({"id":id,"version":0,"draft":{},"releases":[],"archived":false,"offline":true}));
                 check_version(version(p), input)?;
                 if p["archived"] == true {
                     return Err(conflict());
@@ -83,7 +90,7 @@ impl State {
             }
             "product_rollback" => {
                 text(input, "reason")?;
-                let p = self.catalog.products.get(&id).ok_or(not_found())?;
+                let p = self.catalog().products.get(&id).ok_or(not_found())?;
                 check_version(version(p), input)?;
                 if p["archived"] == true {
                     return Err(conflict());
@@ -98,14 +105,19 @@ impl State {
                     })
                     .cloned()
                     .ok_or(not_found())?;
-                let p = self.catalog.products.get_mut(&id).unwrap();
+                let p = self.catalog_mut().products.get_mut(&id).unwrap();
                 p["draft"] = release["content"].clone();
                 p["editor"] = json!(actor);
                 p["version"] = json!(version(p) + 1);
                 json!({"id":id,"version":version(p),"status":"draft","notice":"回滚创建草稿，须重新校验并独立审核发布"})
             }
             "product_submit" => {
-                let mut p = self.catalog.products.get(&id).cloned().ok_or(not_found())?;
+                let mut p = self
+                    .catalog()
+                    .products
+                    .get(&id)
+                    .cloned()
+                    .ok_or(not_found())?;
                 check_version(version(&p), input)?;
                 if p["archived"] == true
                     || p["releases"]
@@ -129,14 +141,19 @@ impl State {
                     }
                 }
                 let r = json!({"id":generated,"content":p["draft"],"starts_at":start,"ends_at":end,"status":"pending","submitted_by":actor,"editor":p["editor"],"submitted_at":now});
-                let p = self.catalog.products.get_mut(&id).unwrap();
+                let p = self.catalog_mut().products.get_mut(&id).unwrap();
                 p["releases"].as_array_mut().unwrap().push(r);
                 p["version"] = json!(version(p) + 1);
                 json!({"id":id,"release_id":generated,"version":version(p),"status":"pending"})
             }
             "product_review" => {
                 text(input, "reason")?;
-                let p = self.catalog.products.get(&id).cloned().ok_or(not_found())?;
+                let p = self
+                    .catalog()
+                    .products
+                    .get(&id)
+                    .cloned()
+                    .ok_or(not_found())?;
                 check_version(version(&p), input)?;
                 let pos = p["releases"]
                     .as_array()
@@ -168,7 +185,7 @@ impl State {
                 } else if input["approved"] != false {
                     return Err(invalid("需明确审核结论"));
                 }
-                let p = self.catalog.products.get_mut(&id).unwrap();
+                let p = self.catalog_mut().products.get_mut(&id).unwrap();
                 p["releases"][pos]["status"] = json!(if input["approved"] == true {
                     "approved"
                 } else {
@@ -181,7 +198,7 @@ impl State {
                 }
                 p["version"] = json!(version(p) + 1);
                 self.notification(&id, "release_reviewed", now);
-                json!({"id":id,"version":version(&self.catalog.products[&id])})
+                json!({"id":id,"version":version(&self.catalog().products[&id])})
             }
             "product_offline" | "product_archive" => {
                 text(input, "reason")?;
@@ -195,7 +212,11 @@ impl State {
                     text(input, "risk_id")?;
                     text(input, "impact")?;
                 }
-                let p = self.catalog.products.get_mut(&id).ok_or(not_found())?;
+                let p = self
+                    .catalog_mut()
+                    .products
+                    .get_mut(&id)
+                    .ok_or(not_found())?;
                 check_version(version(p), input)?;
                 p["offline"] = json!(true);
                 p["version"] = json!(version(p) + 1);
@@ -211,7 +232,7 @@ impl State {
                     }
                 }
                 self.notification(&id, action, now);
-                json!({"id":id,"version":version(&self.catalog.products[&id]),"stock_policy":"continue_existing"})
+                json!({"id":id,"version":version(&self.catalog().products[&id]),"stock_policy":"continue_existing"})
             }
             "policy_publish" => {
                 let window = num(input, "window_seconds")?;
@@ -219,9 +240,9 @@ impl State {
                 {
                     return Err(invalid("明确配置正整数归因窗口及首触或末触策略"));
                 }
-                check_version(self.catalog.policies.len() as u64, input)?;
-                let p = json!({"id":generated,"version":self.catalog.policies.len()+1,"window_seconds":window,"strategy":input["strategy"],"starts_at":now,"owner":actor});
-                self.catalog.policies.push(p.clone());
+                check_version(self.catalog().policies.len() as u64, input)?;
+                let p = json!({"id":generated,"version":self.catalog().policies.len()+1,"window_seconds":window,"strategy":input["strategy"],"starts_at":now,"owner":actor});
+                self.catalog_mut().policies.push(p.clone());
                 p
             }
             "touch_bind" => self.bind_touch(actor, text(input, "touch_token")?, now)?,
@@ -233,7 +254,7 @@ impl State {
                 }
                 text(input, "reason")?;
                 let old = self
-                    .catalog
+                    .catalog()
                     .eligibility
                     .get(target)
                     .cloned()
@@ -243,7 +264,7 @@ impl State {
                 strings(&input["qualifications"])?;
                 let mut history = old["history"].as_array().cloned().unwrap_or_default();
                 history.push(json!({"region":region,"qualifications":input["qualifications"],"verified_by":actor,"reason":input["reason"],"time":now}));
-                self.catalog.eligibility.insert(target.into(),json!({"version":version(&old)+1,"region":region,"qualifications":input["qualifications"],"history":history}));
+                self.catalog_mut().eligibility.insert(target.into(),json!({"version":version(&old)+1,"region":region,"qualifications":input["qualifications"],"history":history}));
                 json!({"version":version(&old)+1})
             }
             "task_claim" => {
@@ -271,7 +292,7 @@ impl State {
                     .ok_or(not_found())?;
                 let execution_snapshot = self.task_snapshot(actor, &task, now)?;
                 if execution_snapshot.is_none()
-                    && self.catalog.claims.values().any(|c| {
+                    && self.catalog().claims.values().any(|c| {
                         c["owner"] == actor
                             && c["release_id"] == r["id"]
                             && c["task"]["id"] == task["id"]
@@ -291,7 +312,7 @@ impl State {
                 let regions = strings(&r["content"]["regions"])?;
                 let required = strings(&r["content"]["qualifications"])?;
                 let eligibility = self
-                    .catalog
+                    .catalog()
                     .eligibility
                     .get(actor)
                     .cloned()
@@ -306,7 +327,7 @@ impl State {
                     return Err(Failure("INELIGIBLE", "未满足经核验的地区或资格条件"));
                 }
                 let policy = self
-                    .catalog
+                    .catalog()
                     .policies
                     .last()
                     .cloned()
@@ -318,21 +339,23 @@ impl State {
                     return Err(Failure("SELF_PROMOTION_FORBIDDEN", "此任务不允许本人自推"));
                 }
                 let category = self
-                    .catalog
+                    .catalog()
                     .categories
                     .get(text(&r["content"], "category")?)
                     .cloned()
                     .unwrap();
                 let claim = json!({"id":generated,"owner":actor,"product_id":id,"release_id":r["id"],"product":r["content"],"category":public_category(&category),"task":task,"policy":policy,"touch":touch,"locked_at":now,"submit_until":now.checked_add(num(&task,"submit_seconds")?).ok_or(invalid("时限超出范围"))?,"status":"claimed","notice":"领取仅固定条件和归因，不生成可申请佣金"});
                 self.attach_task(&claim, execution_snapshot, now)?;
-                self.catalog.claims.insert(generated.into(), claim.clone());
+                self.catalog_mut()
+                    .claims
+                    .insert(generated.into(), claim.clone());
                 claim
             }
             "attribution_dispute" => {
                 text(input, "reason")?;
                 text(input, "evidence")?;
                 let c = self
-                    .catalog
+                    .catalog()
                     .claims
                     .get(text(input, "claim_id")?)
                     .ok_or(not_found())?;
@@ -340,7 +363,9 @@ impl State {
                     return Err(Failure("FORBIDDEN", "无权申诉此任务"));
                 }
                 let d = json!({"id":generated,"owner":actor,"claim_id":input["claim_id"],"reason":input["reason"],"evidence":input["evidence"],"original_touch":c["touch"],"status":"pending","version":1,"time":now});
-                self.catalog.disputes.insert(generated.into(), d.clone());
+                self.catalog_mut()
+                    .disputes
+                    .insert(generated.into(), d.clone());
                 d
             }
             "dispute_resolve" => {
@@ -349,7 +374,11 @@ impl State {
                 if !["uphold", "needs_adjustment"].contains(&decision) {
                     return Err(invalid("裁定只能维持归属或转关联数字调整核查"));
                 }
-                let d = self.catalog.disputes.get_mut(&id).ok_or(not_found())?;
+                let d = self
+                    .catalog_mut()
+                    .disputes
+                    .get_mut(&id)
+                    .ok_or(not_found())?;
                 check_version(version(d), input)?;
                 if d["owner"] == actor {
                     return Err(Failure("FORBIDDEN", "不能裁定自己的申诉"));
@@ -368,3 +397,4 @@ impl State {
         Ok(result)
     }
 }
+impl<T: DomainPort + ?Sized> CommandsRules for T {}

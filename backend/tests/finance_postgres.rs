@@ -1,6 +1,6 @@
 use crowd_api::{
-    ApplicationServices, commissions::domain as ledger,
-    platform::south::adapter::postgres::Repository,
+    ApplicationServices, commissions::south::port::rules as ledger,
+    platform::south::port::Repository,
 };
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;

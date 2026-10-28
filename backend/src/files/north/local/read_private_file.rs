@@ -1,5 +1,5 @@
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::Repository;
+use crate::files::south::port::Repository;
+use crate::shared::{Failure, Result};
 
 #[derive(Clone)]
 pub struct ReadPrivateFile {

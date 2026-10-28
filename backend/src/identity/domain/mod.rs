@@ -7,3 +7,5 @@ mod model;
 pub use model::User;
 mod access;
 pub(crate) use access::{access, validate_input};
+
+pub use behavior::BehaviorRules;

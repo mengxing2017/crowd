@@ -1,7 +1,8 @@
 use super::validation::{
     active, array, conflict, missing, next_time, number, positive, require, version,
 };
-use crate::platform::domain::{Failure, Result, State, invalid, text};
+use crate::shared::{Failure, Result, invalid, text};
+use crate::tasks::south::port::DomainPort;
 use serde_json::{Value, json};
 
 /// All arithmetic is integral; proportional inputs come exclusively from a verified source.
@@ -187,8 +188,8 @@ fn validate_template(t: &Value) -> Result<()> {
     }
     Ok(())
 }
-impl State {
-    pub(super) fn rule_command(
+pub trait TaskDefinitionRules: DomainPort {
+    fn rule_command(
         &mut self,
         actor: &str,
         action: &str,
@@ -199,9 +200,9 @@ impl State {
         let price = action.starts_with("price_");
         let id = input["id"].as_str().unwrap_or(generated);
         let map = if price {
-            &self.tasks.prices
+            &self.tasks().prices
         } else {
-            &self.tasks.templates
+            &self.tasks().templates
         };
         if action.ends_with("_save") {
             let previous = map.get(id);
@@ -219,9 +220,9 @@ impl State {
             require(previous.is_none(), "版本不可覆盖，请用新编号创建新版本")?;
             let value = json!({"id":id,"version":1,"content":content,"editor":actor,"created_at":now,"status":"pending","history":[]});
             if price {
-                self.tasks.prices.insert(id.into(), value.clone());
+                self.tasks_mut().prices.insert(id.into(), value.clone());
             } else {
-                self.tasks.templates.insert(id.into(), value.clone());
+                self.tasks_mut().templates.insert(id.into(), value.clone());
             }
             return Ok(value);
         }
@@ -242,7 +243,7 @@ impl State {
             if input["approve"] == true && price {
                 let c = &old["content"];
                 for other in self
-                    .tasks
+                    .tasks()
                     .prices
                     .values()
                     .filter(|p| p["status"] == "approved")
@@ -280,24 +281,24 @@ impl State {
         }
         old["version"] = json!(version(&old) + 1);
         if price {
-            self.tasks.prices.insert(id.into(), old.clone());
+            self.tasks_mut().prices.insert(id.into(), old.clone());
         } else {
-            self.tasks.templates.insert(id.into(), old.clone());
+            self.tasks_mut().templates.insert(id.into(), old.clone());
         }
         Ok(old)
     }
-    pub fn task_snapshot(&self, actor: &str, task: &Value, now: i64) -> Result<Option<Value>> {
+    fn task_snapshot(&self, actor: &str, task: &Value, now: i64) -> Result<Option<Value>> {
         let Some(template_id) = task["template_id"].as_str() else {
             return Ok(None);
         };
         let template = self
-            .tasks
+            .tasks()
             .templates
             .get(template_id)
             .filter(|v| v["status"] == "approved")
             .ok_or(Failure("DEPENDENCY_UNAVAILABLE", "任务模板未批准或已停用"))?;
         let price = self
-            .tasks
+            .tasks()
             .prices
             .get(text(task, "price_id")?)
             .filter(|v| v["status"] == "approved")
@@ -312,8 +313,7 @@ impl State {
             "规则或领取时间已到期",
         )?;
         let qualification = self
-            .catalog
-            .eligibility
+            .catalog_eligibility()
             .get(actor)
             .cloned()
             .unwrap_or(Value::Null);
@@ -348,7 +348,7 @@ impl State {
             "产品展示数字与批准规则不一致",
         )?;
         let prior: Vec<_> = self
-            .tasks
+            .tasks()
             .instances
             .values()
             .filter(|v| {
@@ -361,8 +361,7 @@ impl State {
             "任务模板总名额不足",
         )?;
         let own: Vec<_> = self
-            .catalog
-            .claims
+            .catalog_claims()
             .values()
             .filter(|v| v["owner"] == actor && v["task"]["id"] == task["id"])
             .collect();
@@ -391,7 +390,7 @@ impl State {
             let a = number(p, "period_anchor")?;
             let start = a + (now - a).div_euclid(d) * d;
             let used: i128 = self
-                .tasks
+                .tasks()
                 .instances
                 .values()
                 .filter(|v| {
@@ -414,7 +413,7 @@ impl State {
             json!({"template_id":template_id,"template_version":template["version"],"template":t,"price":frozen_price,"qualification":qualification,"reserved_cents":reserve}),
         ))
     }
-    pub fn attach_task(&mut self, claim: &Value, snapshot: Option<Value>, now: i64) -> Result<()> {
+    fn attach_task(&mut self, claim: &Value, snapshot: Option<Value>, now: i64) -> Result<()> {
         let Some(snapshot) = snapshot else {
             return Ok(());
         };
@@ -434,24 +433,27 @@ impl State {
             positive(&t["template"], "execution_seconds")?
         )?);
         t["submit_until"] = json!(next_time(now, positive(&t["template"], "submit_seconds")?)?);
-        self.tasks.instances.insert(text(claim, "id")?.into(), t);
+        self.tasks_mut()
+            .instances
+            .insert(text(claim, "id")?.into(), t);
         Ok(())
     }
 }
+impl<T: DomainPort + ?Sized> TaskDefinitionRules for T {}
 
-impl State {
-    pub fn validate_task_reference(&self, task: &mut Value, start: i64, end: i64) -> Result<()> {
+pub trait TaskLifecycleRules: DomainPort {
+    fn validate_task_reference(&self, task: &mut Value, start: i64, end: i64) -> Result<()> {
         let Some(id) = task["template_id"].as_str() else {
             return Ok(());
         };
         let template = self
-            .tasks
+            .tasks()
             .templates
             .get(id)
             .filter(|v| v["status"] == "approved")
             .ok_or(Failure("DEPENDENCY_UNAVAILABLE", "任务模板未批准或已停用"))?;
         let price = self
-            .tasks
+            .tasks()
             .prices
             .get(text(task, "price_id")?)
             .filter(|v| v["status"] == "approved")
@@ -484,9 +486,9 @@ impl State {
         task["price_preview"] = p.clone();
         Ok(())
     }
-    pub fn expire_tasks(&mut self, now: i64) -> usize {
+    fn expire_tasks(&mut self, now: i64) -> usize {
         let reminders: Vec<_> = self
-            .tasks
+            .tasks()
             .instances
             .iter()
             .filter(|(_, t)| {
@@ -512,11 +514,11 @@ impl State {
             .collect();
         for (id, receipt, product, assigned, phase, owner, first) in reminders {
             let key = json!([id, receipt, phase]).to_string();
-            if self.tasks.reminders.contains(&key) {
+            if self.tasks().reminders.contains(&key) {
                 continue;
             }
             let recipients: Vec<_> = self
-                .users
+                .users()
                 .keys()
                 .filter(|actor| {
                     if phase == "awaiting_verification" {
@@ -531,14 +533,13 @@ impl State {
                 .cloned()
                 .collect();
             for recipient in recipients {
-                self.catalog.revision += 1;
-                self.catalog.notifications.push(json!({"recipient":recipient,"product_id":product,"task_id":id,"kind":"review_overdue","time":now,"revision":self.catalog.revision}));
+                self.record_catalog_notification(json!({"recipient":recipient,"product_id":product,"task_id":id,"kind":"review_overdue","time":now}));
             }
-            self.tasks.reminders.push(key);
+            self.tasks_mut().reminders.push(key);
         }
 
         let ids: Vec<_> = self
-            .tasks
+            .tasks()
             .instances
             .iter()
             .filter(|(_, t)| {
@@ -555,7 +556,7 @@ impl State {
             .map(|(id, _)| id.clone())
             .collect();
         for id in &ids {
-            let t = self.tasks.instances.get_mut(id).unwrap();
+            let t = self.tasks_mut().instances.get_mut(id).unwrap();
             t["status"] = json!("expired");
             t["reservation_released"] = json!(t["template"]["release_on_terminal"] == true);
             t["version"] = json!(version(t) + 1);
@@ -563,11 +564,10 @@ impl State {
                 .as_array_mut()
                 .unwrap()
                 .push(json!({"action":"timeout","at":now,"actor":"task-worker"}));
-            if let Some(c) = self.catalog.claims.get_mut(id) {
-                c["status"] = json!("expired");
-                c["reservation_released"] = t["reservation_released"].clone();
-            }
+            let released = t["reservation_released"].clone();
+            self.update_claim_progress(id, json!("expired"), released);
         }
         ids.len()
     }
 }
+impl<T: DomainPort + ?Sized> TaskLifecycleRules for T {}

@@ -73,8 +73,7 @@ async fn run_api(
             Some(password) => password.clone(),
             None => sqlx::query_scalar::<_, String>("SELECT encode(gen_random_bytes(24),'hex')").fetch_one(&pool).await?,
         };
-        crowd_api::platform::south::adapter::postgres::Repository { pool: pool.clone() }
-            .bootstrap_staff("admin", &password).await.map_err(|_| "development administrator bootstrap failed")?;
+        crowd_api::platform::south::port::bootstrap_staff(pool.clone(), "admin", &password).await.map_err(|_| "development administrator bootstrap failed")?;
         // Keep the private temporary file as an alternative to local startup output.
         let credential_file = postgres.settings().data_dir.join("crowd-admin-credentials.txt");
         let mut options = std::fs::OpenOptions::new();
@@ -101,40 +100,45 @@ async fn run_business_tests(postgres: &PostgreSQL) -> Result<(), Box<dyn std::er
     const DATABASE: &str = "crowd_test_embedded";
     postgres.create_database(DATABASE).await?;
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-    let mut child = tokio::process::Command::new("cargo")
-        .args(["test", "--locked", "--manifest-path"])
-        .arg(manifest)
-        .args([
-            "--test",
-            "community_postgres",
-            "--test",
-            "finance_postgres",
-            "--",
-            "--ignored",
-            "--nocapture",
-        ])
-        // Always override inherited test URLs; never forward an external application URL.
-        .env_remove("CROWD_DATABASE_URL")
-        .env(
-            "CROWD_TEST_DATABASE_URL",
-            postgres
-                .settings()
-                .url(DATABASE)
-                .replacen("postgresql://", "postgres://", 1),
-        )
-        .env("CROWD_PROMOTION_ORIGIN", "https://crowd.example.test")
-        .kill_on_drop(true)
-        .spawn()?;
-    let status = tokio::select! {
-        result = child.wait() => result?,
-        () = crowd_api::runtime::shutdown() => {
-            child.start_kill()?;
-            let _ = child.wait().await;
-            return Err("embedded business tests interrupted".into());
+    // Preserve the original test binary order: community requires the fresh database.
+    for filter in [
+        "validation_tests::community_postgres::",
+        "validation_tests::finance_postgres::",
+    ] {
+        let mut child = tokio::process::Command::new("cargo")
+            .args(["test", "--locked", "--manifest-path"])
+            .arg(&manifest)
+            .args([
+                "--lib",
+                filter,
+                "--",
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            // Always override inherited test URLs; never forward an external application URL.
+            .env_remove("CROWD_DATABASE_URL")
+            .env(
+                "CROWD_TEST_DATABASE_URL",
+                postgres
+                    .settings()
+                    .url(DATABASE)
+                    .replacen("postgresql://", "postgres://", 1),
+            )
+            .env("CROWD_PROMOTION_ORIGIN", "https://crowd.example.test")
+            .kill_on_drop(true)
+            .spawn()?;
+        let status = tokio::select! {
+            result = child.wait() => result?,
+            () = crowd_api::runtime::shutdown() => {
+                child.start_kill()?;
+                let _ = child.wait().await;
+                return Err("embedded business tests interrupted".into());
+            }
+        };
+        if !status.success() {
+            return Err("embedded business integration tests failed".into());
         }
-    };
-    if !status.success() {
-        return Err("embedded business integration tests failed".into());
     }
     Ok(())
 }

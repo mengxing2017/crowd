@@ -1,8 +1,14 @@
-use crate::platform::domain::State;
-use crate::receipts::domain::mask_receipts;
+use super::BehaviorRules;
+use crate::identity::south::port::DomainPort;
+use crate::shared::mask_receipts;
 use crate::shared::{Failure, Result};
 use serde_json::{Value, json};
-pub(crate) fn read(state: &State, actor: &str, section: &str, target: &str) -> Result<Value> {
+pub(crate) fn read<P: DomainPort + ?Sized>(
+    state: &P,
+    actor: &str,
+    section: &str,
+    target: &str,
+) -> Result<Value> {
     match section {
         "me" => {
             let mut value = serde_json::to_value(state.user(actor)?).expect("serialize user");

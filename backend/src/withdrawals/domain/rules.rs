@@ -1,11 +1,11 @@
+use crate::withdrawals::south::port::DomainPort;
 use crate::{
-    commissions::domain::{cents, number, require},
-    platform::domain::State,
     shared::{Failure, Result, text},
+    shared::{cents, number, require},
 };
 use serde_json::{Value, json};
-pub fn active_rule(s: &State) -> Result<Value> {
-    s.withdrawals
+pub fn active_rule<P: DomainPort + ?Sized>(s: &P) -> Result<Value> {
+    s.withdrawals()
         .rules
         .iter()
         .rev()
@@ -16,8 +16,8 @@ pub fn active_rule(s: &State) -> Result<Value> {
             "提现规则尚未发布，暂不可申请",
         ))
 }
-pub fn rule_command(
-    s: &mut State,
+pub fn rule_command<P: DomainPort + ?Sized>(
+    s: &mut P,
     actor: &str,
     a: &str,
     i: &Value,
@@ -80,18 +80,18 @@ pub fn rule_command(
         }
         let mut r = i.clone();
         r["id"] = json!(id);
-        r["version"] = json!(s.withdrawals.rules.len() + 1);
+        r["version"] = json!(s.withdrawals().rules.len() + 1);
         r["status"] = json!("draft");
         r["actor"] = json!(actor);
         r["at"] = json!(now);
         r["currency"] = json!("CNY");
         r["extra_deduction_cents"] = json!(0);
-        s.withdrawals.rules.push(r.clone());
+        s.withdrawals_mut().rules.push(r.clone());
         Ok(r)
     } else {
         let key = text(i, "id")?;
         let r = s
-            .withdrawals
+            .withdrawals()
             .rules
             .iter()
             .find(|r| r["id"] == key)
@@ -103,14 +103,14 @@ pub fn rule_command(
         )?;
         require(i["approve"].is_boolean(), "请选择复核结论")?;
         if i["approve"] == true {
-            for old in &mut s.withdrawals.rules {
+            for old in &mut s.withdrawals_mut().rules {
                 if old["status"] == "published" {
                     old["status"] = json!("superseded");
                 }
             }
         }
         let r = s
-            .withdrawals
+            .withdrawals_mut()
             .rules
             .iter_mut()
             .find(|r| r["id"] == key)

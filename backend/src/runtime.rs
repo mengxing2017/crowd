@@ -40,7 +40,7 @@ async fn serve_inner(
             .filter(|v| !v.is_empty());
         match (username, password) {
             (Some(username), Some(password)) => {
-                crate::platform::south::adapter::postgres::Repository { pool: pool.clone() }
+                crate::platform::south::port::Repository { pool: pool.clone() }
                     .bootstrap_staff(&username, &password)
                     .await
                     .map_err(|_| "administrator bootstrap failed; check configuration")?;
@@ -50,8 +50,8 @@ async fn serve_inner(
         }
     }
     let listener = tokio::net::TcpListener::bind(address).await?;
-    let code_jobs = crate::platform::south::adapter::postgres::Repository { pool: pool.clone() };
-    let catalog = crate::catalog::north::local::ReconcileCatalog::new(code_jobs.clone());
+    let code_jobs = crate::platform::south::port::Repository { pool: pool.clone() };
+    let catalog = crate::catalog::south::port::services::ReconcileCatalog::new(code_jobs.clone());
     let worker = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
         loop {

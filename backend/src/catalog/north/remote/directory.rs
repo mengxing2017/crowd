@@ -1,7 +1,7 @@
 use crate::{
     Application,
     http::{request_id, response},
-    platform::domain::Failure,
+    shared::Failure,
 };
 use axum::{
     extract::{Query, State},

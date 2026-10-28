@@ -1,11 +1,11 @@
+use crate::settlements::south::port::DomainPort;
 use crate::{
-    commissions::domain::require,
-    platform::domain::State,
+    shared::require,
     shared::{Result, text},
 };
 use serde_json::{Value, json};
-pub(super) fn handle(
-    s: &mut State,
+pub(super) fn handle<P: DomainPort + ?Sized>(
+    s: &mut P,
     app: &mut Value,
     actor: &str,
     a: &str,
@@ -14,7 +14,7 @@ pub(super) fn handle(
 ) -> Result<()> {
     if a == "settlement_claim" {
         require(
-            !crate::commissions::domain::source_disputed(s, app),
+            !s.commission_source_disputed(app),
             "本单佣金来源有争议，先核查，不可开始线下处理",
         )?;
         require(
@@ -114,14 +114,7 @@ pub(super) fn handle(
                 app["registration"].is_null(),
                 "已有付款登记须先独立核查，不能直接释放",
             )?;
-            crate::withdrawals::domain::release(
-                s,
-                app,
-                "rejected",
-                actor,
-                text(i, "reason")?,
-                now,
-            )?;
+            s.release_withdrawal(app, "rejected", actor, text(i, "reason")?, now)?;
         }
         _ => unreachable!(),
     }

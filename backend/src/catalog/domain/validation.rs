@@ -1,4 +1,5 @@
-use crate::platform::domain::{Failure, Result, State, invalid, text};
+use crate::catalog::south::port::DomainPort;
+use crate::shared::{Failure, Result, invalid, text};
 use serde_json::{Value, json};
 
 pub(super) fn num(v: &Value, field: &str) -> Result<i64> {
@@ -23,13 +24,13 @@ pub(super) fn public_category(category: &Value) -> Value {
     json!({"id":category["id"],"version":category["version"],"name":category["name"],"sort":category["sort"],"enabled":category["enabled"]})
 }
 
-impl State {
-    pub(super) fn validate_content(&self, c: &Value, now: i64, live: bool) -> Result<()> {
+pub trait ValidationRules: DomainPort {
+    fn validate_content(&self, c: &Value, now: i64, live: bool) -> Result<()> {
         for field in ["name", "category", "summary", "details", "limitations"] {
             text(c, field)?;
         }
         let cat = self
-            .catalog
+            .catalog()
             .categories
             .get(text(c, "category")?)
             .ok_or(invalid("分类不存在"))?;
@@ -84,9 +85,9 @@ impl State {
         }
         Ok(())
     }
-    pub(super) fn task_available(&self, product: &str, task: &Value, now: i64) -> bool {
+    fn task_available(&self, product: &str, task: &Value, now: i64) -> bool {
         let count = self
-            .catalog
+            .catalog()
             .claims
             .values()
             .filter(|c| {
@@ -96,7 +97,7 @@ impl State {
             })
             .count() as i64;
         let used = self
-            .catalog
+            .catalog()
             .claims
             .values()
             .filter(|c| {
@@ -108,7 +109,7 @@ impl State {
                 acc.checked_add(c["task"]["commission_cents"].as_i64().unwrap_or(0))
             });
         task["template_id"].as_str().is_none_or(|id| {
-            self.tasks.templates.get(id).is_some_and(|v| {
+            self.tasks_templates().get(id).is_some_and(|v| {
                 v["status"] == "approved"
                     && v["content"]["claim_until"]
                         .as_i64()
@@ -123,3 +124,4 @@ impl State {
             })
     }
 }
+impl<T: DomainPort + ?Sized> ValidationRules for T {}

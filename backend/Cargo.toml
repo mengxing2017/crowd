@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.1"
 publish = false
+autotests = false
 
 [dependencies]
 argon2 = "0.5"
@@ -19,6 +20,7 @@ qrcode = { version = "0.14", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
+syn = { version = "2", features = ["full", "visit"] }
 postgresql_embedded = { version = "0.21", default-features = false, features = ["tokio", "theseus", "tls-rustls-ring"] }
 tokio = { version = "1", features = ["process"] }
 tower = { version = "0.5", features = ["util"] }

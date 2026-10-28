@@ -1,6 +1,6 @@
 //! Staff credentials are separate from trusted WeChat end-user identities.
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::{Repository, database};
+use crate::platform::south::port::rules::{Failure, Result};
+use crate::platform::south::port::{Repository, database};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use serde_json::{Value, json};
 use sqlx::Row;

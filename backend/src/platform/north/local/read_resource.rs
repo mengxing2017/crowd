@@ -1,5 +1,5 @@
-use crate::platform::domain::Result;
-use crate::platform::south::adapter::postgres::Repository;
+use crate::platform::south::port::Repository;
+use crate::shared::Result;
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -24,8 +24,9 @@ impl ReadResource {
         let mut state = Repository::load(&mut tx).await?;
         let now = Repository::time(&mut tx).await?;
         let epoch = Repository::epoch(&mut tx).await?;
-        let result =
-            super::query_dispatch::read(&mut state, &actor, section, target, request, &now, epoch);
+        let result = crate::platform::south::port::query_dispatch::read(
+            &mut state, &actor, section, target, request, &now, epoch,
+        );
         if let Err(ref failure) = result {
             state.log_failure(
                 &actor,

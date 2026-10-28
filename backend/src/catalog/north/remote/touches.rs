@@ -1,7 +1,7 @@
 use crate::{
     Application,
     http::{parse, request_id, response},
-    platform::domain::Failure,
+    shared::Failure,
 };
 use axum::{
     Json,

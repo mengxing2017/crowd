@@ -1,8 +1,9 @@
-use crate::platform::domain::State;
+use super::BehaviorRules;
+use crate::identity::south::port::DomainPort;
 use crate::shared::{Failure, Result, check_version, invalid, text};
 use serde_json::{Value, json};
-pub(crate) fn command(
-    state: &mut State,
+pub(crate) fn command<P: DomainPort + ?Sized>(
+    state: &mut P,
     actor: &str,
     action: &str,
     input: &Value,
@@ -13,7 +14,7 @@ pub(crate) fn command(
     let result = match action {
         "profile" => {
             let nickname = text(input, "nickname")?;
-            let u = state.users.get_mut(actor).unwrap();
+            let u = state.users_mut().get_mut(actor).unwrap();
             check_version(u.version, input)?;
             u.nickname = nickname.into();
             u.avatar = input["avatar"].as_str().map(str::to_owned);
@@ -28,7 +29,7 @@ pub(crate) fn command(
             }
             text(input, "reason")?;
             let u = state
-                .users
+                .users_mut()
                 .get_mut(target)
                 .ok_or(Failure("NOT_FOUND", "用户不存在"))?;
             check_version(u.version, input)?;

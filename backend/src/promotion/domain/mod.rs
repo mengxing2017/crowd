@@ -7,3 +7,5 @@ mod model;
 pub use model::Code;
 mod access;
 pub(crate) use access::access;
+
+pub use behavior::BehaviorRules;

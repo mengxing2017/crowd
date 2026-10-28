@@ -1,8 +1,8 @@
-use crate::platform::domain::State;
 use crate::shared::{Failure, Result};
+use crate::tasks::south::port::DomainPort;
 use serde_json::json;
-pub(crate) fn validate_upload(
-    state: &State,
+pub(crate) fn validate_upload<P: DomainPort + ?Sized>(
+    state: &P,
     actor: &str,
     purpose: &str,
     size: usize,
@@ -10,7 +10,7 @@ pub(crate) fn validate_upload(
     let task_id = purpose.strip_prefix("task_evidence:");
     if let Some(id) = task_id {
         let t = state
-            .tasks
+            .tasks()
             .instances
             .get(id)
             .ok_or(Failure("NOT_FOUND", "任务不存在"))?;
@@ -23,7 +23,7 @@ pub(crate) fn validate_upload(
             return Err(Failure("INVALID_INPUT", "证据图片超过模板大小限制"));
         }
         let count = state
-            .tasks
+            .tasks()
             .attachments
             .values()
             .filter(|a| a["task_id"] == id)
@@ -39,8 +39,8 @@ pub(crate) fn validate_upload(
     }
     Ok(())
 }
-pub(crate) fn register_upload(
-    state: &mut State,
+pub(crate) fn register_upload<P: DomainPort + ?Sized>(
+    state: &mut P,
     actor: &str,
     task: Option<&str>,
     id: &str,
@@ -48,7 +48,7 @@ pub(crate) fn register_upload(
 ) {
     if let Some(task) = task {
         state
-            .tasks
+            .tasks_mut()
             .attachments
             .insert(id.into(), json!({"task_id":task,"owner":actor,"size":size}));
     }

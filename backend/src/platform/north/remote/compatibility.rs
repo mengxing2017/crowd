@@ -10,7 +10,7 @@ use axum::{
 };
 use serde_json::Value;
 
-pub(super) async fn read(
+pub(crate) async fn read(
     State(app): State<Application>,
     Path(section): Path<String>,
     Query(scope): Query<Scope>,
@@ -18,7 +18,7 @@ pub(super) async fn read(
 ) -> Response {
     http::read(&app, &headers, &section, scope).await
 }
-pub(super) async fn command(
+pub(crate) async fn command(
     State(app): State<Application>,
     Path(action): Path<String>,
     headers: HeaderMap,

@@ -1,8 +1,8 @@
-use crate::platform::domain::State;
 use crate::shared::{Failure, Result, text};
+use crate::support::south::port::DomainPort;
 use serde_json::{Value, json};
-pub(crate) fn command(
-    state: &mut State,
+pub(crate) fn command<P: DomainPort + ?Sized>(
+    state: &mut P,
     actor: &str,
     action: &str,
     input: &Value,
@@ -15,16 +15,15 @@ pub(crate) fn command(
             text(input, "reason")?;
             if let Some(record) = input["record_id"].as_str().filter(|v| !v.is_empty())
                 && !state
-                    .commissions
-                    .entries
+                    .commissions_entries()
                     .iter()
                     .any(|e| e["id"] == record && e["owner"] == actor)
             {
                 return Err(Failure("FORBIDDEN", "数字记录不存在或不属于本人"));
             }
             if let Some(id) = input["application_id"].as_str().filter(|v| !v.is_empty())
-                && state.withdrawals.applications.contains_key(id)
-                && state.withdrawals.applications[id]["owner"] != actor
+                && state.withdrawals_applications().contains_key(id)
+                && state.withdrawals_applications()[id]["owner"] != actor
             {
                 return Err(Failure("FORBIDDEN", "申请不属于本人"));
             }
@@ -34,7 +33,7 @@ pub(crate) fn command(
             } else {
                 "pending_verification"
             };
-            state.cases.push(json!({"id":generated,"owner":actor,"kind":action,"status":status,"reason":input["reason"],"affected_application":input["application_id"],"record_id":input["record_id"],"verification_kind":if input["record_id"].is_string(){"digital_correction"}else{"offline_payment_inquiry"},"time":time}));
+            state.cases_mut().push(json!({"id":generated,"owner":actor,"kind":action,"status":status,"reason":input["reason"],"affected_application":input["application_id"],"record_id":input["record_id"],"verification_kind":if input["record_id"].is_string(){"digital_correction"}else{"offline_payment_inquiry"},"time":time}));
             json!({"id":generated,"status":status})
         }
         _ => return Err(Failure("NOT_FOUND", "操作不存在")),

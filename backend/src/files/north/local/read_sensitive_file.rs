@@ -1,9 +1,8 @@
+use crate::files::south::port::FileAccess;
 use crate::{
-    platform::{
-        domain::{Failure, Result},
-        south::adapter::postgres::Repository,
-    },
+    files::south::port::{AuditWriter, Repository},
     shared::text,
+    shared::{Failure, Result},
 };
 use serde_json::json;
 #[derive(Clone)]
@@ -28,14 +27,14 @@ impl ReadSensitiveFile {
         if state.user(&actor)?.status != "active" {
             return Err(Failure("FORBIDDEN", "账号不可查看敏感资料"));
         }
-        if state.tasks.attachments.contains_key(id) {
+        if state.task_attachment_exists(id) {
             drop(tx);
-            return crate::tasks::north::local::ReadEvidenceFile::new(self.repo.clone())
+            return crate::files::south::port::ReadEvidenceFile::new(self.repo.clone())
                 .execute(token, id, reason, request)
                 .await;
         }
         let mut owner = None;
-        for a in state.withdrawals.applications.values() {
+        for a in state.settlement_applications().values() {
             let receipt = a["receipt_snapshot"]["file_id"] == id;
             let voucher = a["registration"]["voucher_file_id"] == id;
             if !receipt && !voucher {
@@ -70,8 +69,11 @@ impl ReadSensitiveFile {
                 state.log_failure(&actor, "settlement_file_view", id, request, &now, failure.0)
             }
         }
-        if let Some(log) = state.audit.last_mut() {
+        {
+            let mut log = serde_json::json!({});
             log["reason"] = json!(reason);
+
+            state.annotate_audit(log);
         }
         Repository::save(&mut tx, &state).await?;
         Repository::commit(tx).await?;

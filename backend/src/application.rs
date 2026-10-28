@@ -1,20 +1,16 @@
-use crate::catalog::north::local::CollectTouch;
-use crate::catalog::north::local::ReadProductImage;
-use crate::catalog::north::local::ReadPublicCatalog;
-use crate::catalog::north::local::ReconcileCatalog;
-use crate::catalog::north::local::RecordVerifiedCompletion;
-use crate::files::north::local::ReadPrivateFile;
-use crate::files::north::local::UploadFile;
-use crate::governance::north::local::ReadAgreements;
-use crate::identity::north::local::RedeemSession;
-use crate::identity::north::local::StaffLogin;
-use crate::identity::north::local::WechatLogin;
-use crate::platform::north::local::ExecuteCommand;
-use crate::platform::north::local::ReadResource;
-use crate::platform::south::adapter::postgres::Repository;
-use crate::promotion::north::local::ResolvePromotion;
-use crate::tasks::north::local::ReadEvidenceFile;
-use crate::tasks::north::local::RecordVerifiedTaskResult;
+use crate::catalog::south::port::services::CollectTouch;
+use crate::catalog::south::port::services::ReadProductImage;
+use crate::catalog::south::port::services::ReadPublicCatalog;
+use crate::files::south::port::services::ReadPrivateFile;
+use crate::files::south::port::services::UploadFile;
+use crate::governance::south::port::services::ReadAgreements;
+use crate::identity::south::port::services::RedeemSession;
+use crate::identity::south::port::services::StaffLogin;
+use crate::identity::south::port::services::WechatLogin;
+use crate::platform::south::port::Repository;
+use crate::platform::south::port::services::ExecuteCommand;
+use crate::platform::south::port::services::ReadResource;
+use crate::promotion::south::port::services::ResolvePromotion;
 
 /// Composition only: each field owns one application use case.
 #[derive(Clone)]
@@ -24,19 +20,16 @@ pub struct ApplicationServices {
     pub agreements: ReadAgreements,
     pub promotions: ResolvePromotion,
     pub queries: ReadResource,
-    pub withdrawal_failure_context: crate::withdrawals::north::local::ReadWithdrawalFailureContext,
+    pub withdrawal_failure_context:
+        crate::withdrawals::south::port::services::ReadWithdrawalFailureContext,
     pub commands: ExecuteCommand,
     pub uploads: UploadFile,
     pub private_files: ReadPrivateFile,
     pub session_redemption: RedeemSession,
-    pub catalog_lifecycle: ReconcileCatalog,
     pub catalog: ReadPublicCatalog,
     pub touches: CollectTouch,
     pub product_images: ReadProductImage,
-    pub verified_completions: RecordVerifiedCompletion,
-    pub verified_task_results: RecordVerifiedTaskResult,
-    pub sensitive_files: crate::files::north::local::ReadSensitiveFile,
-    pub evidence_files: ReadEvidenceFile,
+    pub sensitive_files: crate::files::south::port::services::ReadSensitiveFile,
 }
 
 impl ApplicationServices {
@@ -48,19 +41,19 @@ impl ApplicationServices {
             promotions: ResolvePromotion::new(repo.clone()),
             queries: ReadResource::new(repo.clone()),
             withdrawal_failure_context:
-                crate::withdrawals::north::local::ReadWithdrawalFailureContext::new(repo.clone()),
+                crate::withdrawals::south::port::services::ReadWithdrawalFailureContext::new(
+                    repo.clone(),
+                ),
             commands: ExecuteCommand::new(repo.clone()),
             uploads: UploadFile::new(repo.clone()),
             private_files: ReadPrivateFile::new(repo.clone()),
             session_redemption: RedeemSession::new(repo.clone()),
-            catalog_lifecycle: ReconcileCatalog::new(repo.clone()),
             catalog: ReadPublicCatalog::new(repo.clone()),
             touches: CollectTouch::new(repo.clone()),
             product_images: ReadProductImage::new(repo.clone()),
-            verified_completions: RecordVerifiedCompletion::new(repo.clone()),
-            verified_task_results: RecordVerifiedTaskResult::new(repo.clone()),
-            sensitive_files: crate::files::north::local::ReadSensitiveFile::new(repo.clone()),
-            evidence_files: ReadEvidenceFile::new(repo.clone()),
+            sensitive_files: crate::files::south::port::services::ReadSensitiveFile::new(
+                repo.clone(),
+            ),
         }
     }
 }

@@ -1,7 +1,7 @@
+use crate::settlements::south::port::DomainPort;
 use crate::{
-    commissions::domain::{require, version},
-    platform::domain::State,
     shared::{Failure, Result, text},
+    shared::{require, version},
 };
 use serde_json::{Value, json};
 pub fn is_command(a: &str) -> bool {
@@ -23,15 +23,14 @@ pub fn is_command(a: &str) -> bool {
             | "settlement_correction_review"
     )
 }
-pub fn access(s: &State, actor: &str, a: &str, i: &Value) -> Result<()> {
+pub fn access<P: DomainPort + ?Sized>(s: &P, actor: &str, a: &str, i: &Value) -> Result<()> {
     require(s.user(actor)?.status == "active", "账号不可处理结算")?;
     if a.starts_with("settlement_batch_") {
         s.authorize(actor, "settlement_reviewer", "platform")?;
         return Ok(());
     }
     let app = s
-        .withdrawals
-        .applications
+        .withdrawals_applications()
         .get(text(i, "id")?)
         .ok_or(Failure("NOT_FOUND", "申请不存在"))?;
     s.authorize(
@@ -49,8 +48,8 @@ pub fn access(s: &State, actor: &str, a: &str, i: &Value) -> Result<()> {
         text(app, "owner")?,
     )
 }
-pub fn command(
-    s: &mut State,
+pub fn command<P: DomainPort + ?Sized>(
+    s: &mut P,
     actor: &str,
     a: &str,
     i: &Value,
@@ -63,8 +62,7 @@ pub fn command(
     }
     let key = text(i, "id")?;
     let mut app = s
-        .withdrawals
-        .applications
+        .withdrawals_applications()
         .get(key)
         .cloned()
         .ok_or(Failure("NOT_FOUND", "申请不存在"))?;
@@ -90,6 +88,6 @@ pub fn command(
     app["events"].as_array_mut().unwrap().push(
         json!({"action":a,"actor":actor,"at":now,"reason":i["reason"],"version":event_version,"exception":exception}),
     );
-    s.withdrawals.applications.insert(key.into(), app.clone());
-    crate::withdrawals::domain::read(s, actor, "withdrawal_detail", key, now)
+    s.save_withdrawal_application(key, app.clone());
+    s.read_withdrawal(actor, "withdrawal_detail", key, now)
 }

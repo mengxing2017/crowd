@@ -1,5 +1,5 @@
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::Repository;
+use crate::files::south::port::Repository;
+use crate::shared::{Failure, Result};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -36,7 +36,7 @@ impl UploadFile {
         }
         let task_id = purpose.strip_prefix("task_evidence:");
         let size = bytes.len();
-        crate::tasks::domain::validate_upload(&state, &actor, purpose, size)?;
+        crate::files::south::port::validate_upload(&state, &actor, purpose, size)?;
         let result = Repository::upload(
             &mut tx,
             &actor,
@@ -48,7 +48,7 @@ impl UploadFile {
             bytes,
         )
         .await?;
-        crate::tasks::domain::register_upload(
+        crate::files::south::port::register_upload(
             &mut state,
             &actor,
             task_id,

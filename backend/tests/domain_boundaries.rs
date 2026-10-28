@@ -32,7 +32,7 @@ fn community_is_only_a_namespace_bridge_and_domains_use_actual_owners() {
     assert_eq!(fs::read_dir(&community).unwrap().count(), 1);
     assert_eq!(
         fs::read_to_string(community.join("mod.rs")).unwrap().trim(),
-        "pub use crate::platform::{domain, north, south};"
+        "pub(crate) use crate::platform::south::port::rules as domain;"
     );
     check_dependencies(&source);
 }
@@ -53,7 +53,7 @@ fn shared_transaction_storage_does_not_own_domain_operations() {
         assert!(!storage.contains(&format!("pub async fn {operation}(")));
     }
     assert!(!storage.contains("crowd_code_ownership"));
-    let dispatch = fs::read_to_string(source.join("platform/domain/dispatch.rs")).unwrap();
+    let dispatch = fs::read_to_string(source.join("platform/south/adapter/dispatch.rs")).unwrap();
     for implementation in [
         ".rules.push(",
         ".cases.push(",

@@ -1,30 +1,13 @@
 use std::{fs, path::Path};
 
 fn exports_only(source: &str) -> bool {
-    let declarations = source
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with("//"))
-        .collect::<Vec<_>>()
-        .join(" ");
-    if !declarations.is_empty() && !declarations.ends_with(';') {
+    let Ok(file) = syn::parse_file(source) else {
         return false;
-    }
-    declarations.split(';').all(|declaration| {
-        let item = declaration.trim();
-        if item.is_empty() {
-            return true;
-        }
-        let module = item
-            .strip_prefix("pub mod ")
-            .or_else(|| item.strip_prefix("mod "));
-        if let Some(name) = module {
-            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        } else {
-            item.starts_with("pub use ")
-                || item.starts_with("pub(crate) use ")
-                || item.starts_with("pub(super) use ")
-        }
+    };
+    file.items.iter().all(|item| match item {
+        syn::Item::Mod(module) => module.content.is_none(),
+        syn::Item::Use(import) => !matches!(import.vis, syn::Visibility::Inherited),
+        _ => false,
     })
 }
 

@@ -1,5 +1,5 @@
-use crate::platform::domain::Result;
-use crate::platform::south::adapter::postgres::Repository;
+use crate::identity::south::port::Repository;
+use crate::shared::Result;
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -13,8 +13,8 @@ impl StaffLogin {
     }
 
     pub async fn execute(&self, input: &Value, request: &str) -> Result<Value> {
-        let username = crate::platform::domain::text(input, "username")?;
-        let password = crate::platform::domain::text(input, "password")?;
+        let username = crate::shared::text(input, "username")?;
+        let password = crate::shared::text(input, "password")?;
         self.repo.staff_login(username, password, request).await
     }
 }

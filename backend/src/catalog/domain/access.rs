@@ -1,9 +1,10 @@
 use super::validation::not_found;
-use crate::platform::domain::{Failure, Result, State, text};
+use crate::catalog::south::port::DomainPort;
+use crate::shared::{Failure, Result, text};
 use serde_json::Value;
 
-impl State {
-    pub fn catalog_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
+pub trait AccessRules: DomainPort {
+    fn catalog_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
         let user = self.user(actor)?;
         if user.status != "active" {
             return Err(Failure("ACCOUNT_RESTRICTED", "账号当前不可操作"));
@@ -31,3 +32,4 @@ impl State {
         }
     }
 }
+impl<T: DomainPort + ?Sized> AccessRules for T {}

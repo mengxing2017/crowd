@@ -1,23 +1,25 @@
+#[cfg(test)]
 use super::Code;
-use crate::platform::domain::State;
+use crate::promotion::south::port::DomainPort;
 use crate::shared::{Failure, Result, invalid};
 use serde_json::{Value, json};
-impl State {
-    pub fn register(
+pub trait BehaviorRules: DomainPort {
+    #[cfg(test)]
+    fn register(
         &mut self,
         id: &str,
         code: &str,
         agreement: Value,
         source: Option<String>,
     ) -> Result<()> {
-        if self.users.contains_key(id) {
+        if self.users().contains_key(id) {
             return Ok(());
         }
-        if self.codes.contains_key(code) {
+        if self.codes().contains_key(code) {
             return Err(Failure("CODE_COLLISION", "推广码冲突，请重试"));
         }
         self.register_user(id, agreement, source);
-        self.codes.insert(
+        self.codes_mut().insert(
             code.into(),
             Code {
                 owner: id.into(),
@@ -29,9 +31,9 @@ impl State {
         );
         Ok(())
     }
-    pub fn resolve(&self, code: &str) -> Result<Value> {
+    fn resolve(&self, code: &str) -> Result<Value> {
         let c = self
-            .codes
+            .codes()
             .get(code)
             .filter(|c| c.active)
             .ok_or(Failure("CODE_UNAVAILABLE", "推广码不存在或已撤销"))?;
@@ -44,7 +46,7 @@ impl State {
             json!({"code":code,"version":c.version,"product":c.product,"task":c.task,"notice":"推广访问不产生佣金数字"}),
         )
     }
-    pub fn validate_target(&self, product: Option<&str>, task: Option<&str>) -> Result<()> {
+    fn validate_target(&self, product: Option<&str>, task: Option<&str>) -> Result<()> {
         let Some(product) = product else {
             return if task.is_none() {
                 Ok(())
@@ -52,7 +54,7 @@ impl State {
                 Err(invalid("任务入口必须指定产品"))
             };
         };
-        if self.catalog.products.contains_key(product) {
+        if self.catalog_products().contains_key(product) {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -70,7 +72,7 @@ impl State {
             return Ok(());
         }
         let catalogue = self
-            .rules
+            .rules()
             .iter()
             .find(|r| r["kind"] == "product_tasks" && r["status"] == "published")
             .ok_or(Failure("DEPENDENCY_UNAVAILABLE", "产品任务目录尚未发布"))?;
@@ -93,3 +95,4 @@ impl State {
         Ok(())
     }
 }
+impl<T: DomainPort + ?Sized> BehaviorRules for T {}

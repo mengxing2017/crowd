@@ -1,11 +1,10 @@
-use crowd_api::community::{
-    north::local::Service,
-    south::{adapter::postgres::Repository, port::IdentityProvider},
-};
+#[path = "support/legacy_service.rs"]
+mod legacy_service;
+use super::task_support;
+use crowd_api::platform::south::port::{IdentityProvider, Repository};
+use legacy_service::Service;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
-#[path = "support/tasks.rs"]
-mod task_support;
 struct TrustedFixture;
 impl IdentityProvider for TrustedFixture {
     async fn exchange(&self, code: &str) -> Result<String, ()> {

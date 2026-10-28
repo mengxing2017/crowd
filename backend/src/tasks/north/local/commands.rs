@@ -1,14 +1,14 @@
-use crate::platform::south::adapter::postgres::Repository;
-use crate::platform::{
-    domain::{Failure, Result, State},
-    north::local::CommandContext,
-};
+use crate::shared::{Failure, Result};
+use crate::tasks::domain::*;
+use crate::tasks::south::port::CommandContext;
+use crate::tasks::south::port::DomainPort;
+use crate::tasks::south::port::Repository;
 use serde_json::{Value, json};
 use sqlx::{Postgres, Transaction};
 
-pub(crate) async fn apply(
+pub(crate) async fn apply<P: DomainPort + ?Sized>(
     tx: &mut Transaction<'_, Postgres>,
-    state: &mut State,
+    state: &mut P,
     context: &CommandContext<'_>,
 ) -> Result<Value> {
     let CommandContext {
@@ -22,14 +22,14 @@ pub(crate) async fn apply(
     } = *context;
     let result = state.tasks_command(actor, action, input, generated, epoch)?;
     if action == "evidence_discard" {
-        let id = crate::platform::domain::text(input, "id")?;
+        let id = crate::shared::text(input, "id")?;
         let task = state
-            .tasks
+            .tasks()
             .instances
             .get(id)
             .ok_or(Failure("NOT_FOUND", "任务不存在"))?;
         let unused: Vec<String> = state
-            .tasks
+            .tasks()
             .attachments
             .iter()
             .filter(|(file, a)| {
@@ -53,7 +53,7 @@ pub(crate) async fn apply(
             .collect();
         for file in unused {
             Repository::delete_unused_evidence(tx, &file, actor).await?;
-            state.tasks.attachments.remove(&file);
+            state.tasks_mut().attachments.remove(&file);
         }
     }
     state.log(
@@ -63,11 +63,14 @@ pub(crate) async fn apply(
         request,
         now,
     );
-    if let Some(audit) = state.audit.last_mut() {
+    {
+        let mut audit = serde_json::json!({});
         audit["rule_version"] = json!("M08-M12-v1");
         audit["reason"] = input["reason"].clone();
         audit["object_version"] = input["version"].clone();
         audit["result_ref"] = result["id"].clone();
+
+        state.annotate_audit(audit);
     }
     Ok(result)
 }

@@ -1,2 +1,2 @@
-pub mod adapter;
+pub(in crate::platform) mod adapter;
 pub mod port;

@@ -1,18 +1,18 @@
-use crate::identity::domain::User;
-use crate::promotion::domain::Code;
+use crate::identity::south::port::rules::User;
+use crate::promotion::south::port::rules::Code;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct State {
     #[serde(default)]
-    pub commissions: crate::commissions::domain::Commissions,
+    pub commissions: crate::commissions::south::port::rules::Commissions,
     #[serde(default)]
-    pub withdrawals: crate::withdrawals::domain::Withdrawals,
+    pub withdrawals: crate::withdrawals::south::port::rules::Withdrawals,
     #[serde(default)]
-    pub tasks: crate::tasks::domain::Tasks,
+    pub tasks: crate::tasks::south::port::rules::Tasks,
     #[serde(default)]
-    pub catalog: crate::catalog::domain::Catalog,
+    pub catalog: crate::catalog::south::port::rules::Catalog,
     pub users: BTreeMap<String, User>,
     pub rules: Vec<Value>,
     pub codes: BTreeMap<String, Code>,

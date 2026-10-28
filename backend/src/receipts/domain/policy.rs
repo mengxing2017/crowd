@@ -1,12 +1,9 @@
-use crate::{
-    platform::domain::State,
-    shared::{Failure, Result, text},
-};
+use crate::receipts::south::port::DomainPort;
+use crate::shared::{Failure, Result, text};
 use serde_json::Value;
 
-pub(crate) fn policy(s: &State) -> Option<&Value> {
-    s.withdrawals
-        .rules
+pub(crate) fn policy<P: DomainPort + ?Sized>(s: &P) -> Option<&Value> {
+    s.withdrawals_rules()
         .iter()
         .rev()
         .find(|r| r["status"] == "published")

@@ -1,7 +1,7 @@
 use crate::{
     Application,
     http::{request_id, response, token},
-    platform::domain::Failure,
+    shared::Failure,
 };
 use axum::{
     body::Bytes,

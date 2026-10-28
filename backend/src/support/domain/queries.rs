@@ -1,11 +1,16 @@
-use crate::platform::domain::State;
 use crate::shared::{Failure, Result};
+use crate::support::south::port::DomainPort;
 use serde_json::{Value, json};
-pub(crate) fn read(state: &State, actor: &str, section: &str, _target: &str) -> Result<Value> {
+pub(crate) fn read<P: DomainPort + ?Sized>(
+    state: &P,
+    actor: &str,
+    section: &str,
+    _target: &str,
+) -> Result<Value> {
     match section {
         "cases" => Ok(json!(
             state
-                .cases
+                .cases()
                 .iter()
                 .filter(|v| v["owner"] == actor)
                 .collect::<Vec<_>>()

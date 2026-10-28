@@ -1,5 +1,5 @@
-use crate::platform::domain::Result;
-use crate::platform::south::adapter::postgres::Repository;
+use crate::catalog::south::port::Repository;
+use crate::shared::Result;
 use serde_json::Value;
 
 #[derive(Clone)]

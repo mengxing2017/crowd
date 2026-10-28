@@ -1,2 +1,2 @@
-pub mod local;
+pub(in crate::support) mod local;
 pub mod remote;

@@ -1,17 +1,18 @@
 use super::rules::calculate;
 use super::validation::{array, conflict, missing, next_time, number, positive, require, version};
-use crate::platform::domain::{Result, State, invalid, text};
+use crate::shared::{Result, invalid, text};
+use crate::tasks::south::port::DomainPort;
 use serde_json::{Value, json};
 
-impl State {
+pub trait ReviewRules: DomainPort {
     fn approve_task(&mut self, t: &mut Value, actor: &str, now: i64) -> Result<()> {
         let id = text(t, "id")?.to_owned();
         require(
-            !self.tasks.confirmations.contains_key(&id),
+            !self.tasks().confirmations.contains_key(&id),
             "此实例已有有效佣金确认，不得重复确认",
         )?;
         let source = text(&t["template"], "source")?;
-        let completion = self.tasks.verified_results.get(&id);
+        let completion = self.tasks().verified_results.get(&id);
         if source == "external" || source == "both" {
             require(completion.is_some(), "尚未收到可信来源成果，不能通过审核")?;
         }
@@ -27,14 +28,14 @@ impl State {
         let reserved = t["reserved_cents"].clone();
         t["reserved_cents"] = calculation["amount_cents"].clone();
         let confirmation = json!({"id":id,"claim_id":id,"owner":t["owner"],"calculation":calculation,"previous_reservation_cents":reserved,"reservation_cents":t["reserved_cents"],"price":t["price"],"submission":t["receipt"]["id"],"confirmed_by":actor,"confirmed_at":now,"status":"confirmed","withdrawable":true,"external_payment":false});
-        self.tasks
+        self.tasks_mut()
             .confirmations
             .insert(id.clone(), confirmation.clone());
-        self.tasks.changes.push(json!({"type":"commission_confirmed","claim_id":id,"at":now,"actor":actor,"confirmation":confirmation}));
+        self.tasks_mut().changes.push(json!({"type":"commission_confirmed","claim_id":id,"at":now,"actor":actor,"confirmation":confirmation}));
         t["status"] = json!("approved");
         Ok(())
     }
-    pub(super) fn review_command(
+    fn review_command(
         &mut self,
         actor: &str,
         action: &str,
@@ -53,7 +54,7 @@ impl State {
             for e in entries {
                 let id = text(e, "id")?;
                 require(unique.insert(id), "批量条目重复")?;
-                let t = self.tasks.instances.get(id).ok_or(missing())?;
+                let t = self.tasks().instances.get(id).ok_or(missing())?;
                 require(
                     t["status"] == "reviewing"
                         && t["reviewer"] == actor
@@ -71,13 +72,13 @@ impl State {
             require(total <= 9_007_199_254_740_991, "批量总数超出安全整数")?;
             if action == "review_batch_preview" {
                 let preview = json!({"id":generated,"kind":"batch","actor":actor,"entries":entries,"amount_cents":total as i64,"created_at":now});
-                self.tasks
+                self.tasks_mut()
                     .proposals
                     .insert(generated.into(), preview.clone());
                 return Ok(preview);
             }
             let preview = self
-                .tasks
+                .tasks()
                 .proposals
                 .get(text(input, "preview_id")?)
                 .ok_or(missing())?;
@@ -95,7 +96,7 @@ impl State {
             return Ok(json!({"count":entries.len(),"amount_cents":total as i64}));
         }
         let id = text(input, "id")?;
-        let mut t = self.tasks.instances.get(id).cloned().ok_or(missing())?;
+        let mut t = self.tasks().instances.get(id).cloned().ok_or(missing())?;
         if input["version"].as_u64() != Some(version(&t)) {
             return Err(conflict());
         }
@@ -209,7 +210,7 @@ impl State {
                         matches!(
                             t["status"].as_str(),
                             Some("claimed" | "in_progress" | "paused")
-                        ) && !self.tasks.confirmations.contains_key(id),
+                        ) && !self.tasks().confirmations.contains_key(id),
                         "修复仅限未审核、未确认佣金的任务",
                     )?;
                     require(
@@ -223,12 +224,14 @@ impl State {
                     require(t["status"] == "approved", "仅可申请撤销已通过的结论")?;
                 }
                 let p = json!({"id":generated,"kind":action,"task_id":id,"actor":actor,"task_version":t["version"],"old_status":t["status"],"new_status":input["new_status"],"reason":input["reason"],"evidence":input["evidence"],"status":"pending","at":now});
-                self.tasks.proposals.insert(generated.into(), p.clone());
+                self.tasks_mut()
+                    .proposals
+                    .insert(generated.into(), p.clone());
                 return Ok(p);
             }
             "task_repair_review" | "review_revoke_review" => {
                 let pid = text(input, "proposal_id")?;
-                let mut p = self.tasks.proposals.get(pid).cloned().ok_or(missing())?;
+                let mut p = self.tasks().proposals.get(pid).cloned().ok_or(missing())?;
                 require(
                     p["task_id"] == id
                         && p["actor"] != actor
@@ -256,7 +259,7 @@ impl State {
                     } else {
                         t["status"] = json!("disputed");
                         // Preserve the original confirmation; an append-only hold requests downstream reconciliation.
-                        self.tasks.changes.push(json!({"type":"confirmation_disputed","claim_id":id,"proposal_id":pid,"actor":actor,"at":now,"external_clawback":false,"requires_ledger_reconciliation":true}));
+                        self.tasks_mut().changes.push(json!({"type":"confirmation_disputed","claim_id":id,"proposal_id":pid,"actor":actor,"at":now,"external_clawback":false,"requires_ledger_reconciliation":true}));
                     }
                 }
                 p["status"] = json!(if input["approve"] == true {
@@ -267,13 +270,13 @@ impl State {
                 p["reviewer"] = json!(actor);
                 p["review_reason"] = input["reason"].clone();
                 p["reviewed_at"] = json!(now);
-                self.tasks.proposals.insert(pid.into(), p);
+                self.tasks_mut().proposals.insert(pid.into(), p);
             }
             "quality_inspect" => {
                 require(!array(&t, "decisions")?.is_empty(), "尚无审核结论可抽检")?;
                 text(input, "reason")?;
                 require(input["consistent"].is_boolean(), "请选择抽检一致性结论")?;
-                self.tasks.inspections.push(json!({"id":generated,"task_id":id,"actor":actor,"at":now,"consistent":input["consistent"],"reason":input["reason"],"task_version":t["version"],"submission":t["receipt"]["id"],"next_action":if input["consistent"]==false{"request_independent_correction"}else{"none"}}));
+                self.tasks_mut().inspections.push(json!({"id":generated,"task_id":id,"actor":actor,"at":now,"consistent":input["consistent"],"reason":input["reason"],"task_version":t["version"],"submission":t["receipt"]["id"],"next_action":if input["consistent"]==false{"request_independent_correction"}else{"none"}}));
             }
             _ => return Err(invalid("未知审核动作")),
         }
@@ -282,11 +285,9 @@ impl State {
         t["events"].as_array_mut().unwrap().push(
             json!({"action":action,"actor":actor,"at":now,"reason":input["reason"],"version":v}),
         );
-        self.tasks.instances.insert(id.into(), t.clone());
-        if let Some(c) = self.catalog.claims.get_mut(id) {
-            c["status"] = t["status"].clone();
-            c["reservation_released"] = t["reservation_released"].clone();
-        }
+        self.tasks_mut().instances.insert(id.into(), t.clone());
+        self.update_claim_progress(id, t["status"].clone(), t["reservation_released"].clone());
         Ok(t)
     }
 }
+impl<T: DomainPort + ?Sized> ReviewRules for T {}

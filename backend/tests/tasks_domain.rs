@@ -1,8 +1,7 @@
-#[path = "support/tasks.rs"]
-mod support;
+use super::task_support as support;
 use crowd_api::{
     community::domain::State,
-    tasks::{domain::calculate, south::port::VerifiedTaskResult},
+    tasks::{south::port::VerifiedTaskResult, south::port::rules::calculate},
 };
 use serde_json::{Value, json};
 fn setup() -> State {

@@ -1,3 +1,4 @@
+#![doc = include_str!("../public-surface.md")]
 mod application;
 pub mod audit;
 pub mod commissions;
@@ -11,9 +12,10 @@ pub mod settlements;
 pub mod shared;
 pub mod support;
 pub mod withdrawals;
-pub use application::ApplicationServices;
+pub(crate) use application::ApplicationServices;
 pub mod catalog;
-pub mod community;
+#[cfg(test)]
+pub(crate) mod community;
 mod http;
 pub mod runtime;
 pub mod system;
@@ -21,28 +23,30 @@ pub mod tasks;
 use axum::{Router, routing::get};
 use sqlx::PgPool;
 use system::{
-    north::{local::SystemService, remote},
-    south::adapter::postgres::PostgresReadiness,
+    remote,
+    south::port::{PostgresReadiness, services::SystemService},
 };
 #[derive(Clone)]
 pub struct Application {
-    pub services: ApplicationServices,
-    pub system: SystemService<PostgresReadiness>,
-    pub community: community::north::local::Service,
+    pub(crate) services: ApplicationServices,
+    pub(crate) system: SystemService<PostgresReadiness>,
 }
 pub fn router(pool: PgPool) -> Router {
     Router::new()
-        .merge(platform::north::remote::routes())
+        .merge(platform::remote::routes())
         .route("/healthz", get(remote::liveness))
         .route("/readyz", get(remote::readiness))
         .route("/api/v1/system", get(remote::system_info))
         .with_state(Application {
-            services: ApplicationServices::new(platform::south::adapter::postgres::Repository {
+            services: ApplicationServices::new(platform::south::port::Repository {
                 pool: pool.clone(),
             }),
             system: SystemService::new(PostgresReadiness::new(pool.clone())),
-            community: community::north::local::Service {
-                repo: platform::south::adapter::postgres::Repository { pool },
-            },
         })
 }
+
+#[cfg(test)]
+extern crate self as crowd_api;
+#[cfg(test)]
+#[path = "../tests/mod.rs"]
+mod validation_tests;

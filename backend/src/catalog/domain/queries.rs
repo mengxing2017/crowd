@@ -1,9 +1,11 @@
 use super::validation::{not_found, public_category};
-use crate::platform::domain::{Failure, Result, State, invalid};
+use super::*;
+use crate::catalog::south::port::DomainPort;
+use crate::shared::{Failure, Result, invalid};
 use serde_json::{Value, json};
 
-impl State {
-    pub fn catalog_read(
+pub trait QueriesRules: DomainPort {
+    fn catalog_read(
         &mut self,
         actor: &str,
         section: &str,
@@ -23,20 +25,20 @@ impl State {
                 }
                 let all = user.scope.iter().any(|s| s == "*");
                 let products: Vec<_> = self
-                    .catalog
+                    .catalog()
                     .products
                     .values()
                     .filter(|p| all || user.scope.iter().any(|s| p["id"] == *s))
                     .cloned()
                     .collect();
                 Ok(
-                    json!({"categories":self.catalog.categories.values().collect::<Vec<_>>(),"products":products,"revision":self.catalog.revision,"server_time":now}),
+                    json!({"categories":self.catalog().categories.values().collect::<Vec<_>>(),"products":products,"revision":self.catalog().revision,"server_time":now}),
                 )
             }
             "eligibility" => {
                 self.authorize(actor, "identity_reviewer", target)?;
                 Ok(self
-                    .catalog
+                    .catalog()
                     .eligibility
                     .get(target)
                     .cloned()
@@ -44,26 +46,26 @@ impl State {
             }
             "attribution_policies" => {
                 self.authorize(actor, "rule_manager", "platform")?;
-                Ok(json!({"policies":self.catalog.policies,"touch_count":0,"disputes":[]}))
+                Ok(json!({"policies":self.catalog().policies,"touch_count":0,"disputes":[]}))
             }
             "attribution_admin" => {
                 self.authorize(actor, "attribution_reviewer", target)?;
                 Ok(
-                    json!({"policies":self.catalog.policies,"touch_count":if target=="*" {self.catalog.touches.len()} else {0},"disputes":self.catalog.disputes.values().filter(|d|target=="*" || d["id"]==target).collect::<Vec<_>>()}),
+                    json!({"policies":self.catalog().policies,"touch_count":if target=="*" {self.catalog().touches.len()} else {0},"disputes":self.catalog().disputes.values().filter(|d|target=="*" || d["id"]==target).collect::<Vec<_>>()}),
                 )
             }
             "my_claims" => Ok(json!(
-                self.catalog
+                self.catalog()
                     .claims
                     .values()
                     .filter(|c| c["owner"] == actor)
                     .collect::<Vec<_>>()
             )),
             "my_attribution" => Ok(
-                json!({"touches":self.catalog.touches.iter().filter(|(_,t)|t["user"]==actor).map(|(id,t)| json!({"id":id,"product":t["product"],"time":t["time"],"code":t["code"]})).collect::<Vec<_>>(),"disputes":self.catalog.disputes.values().filter(|d|d["owner"]==actor).collect::<Vec<_>>()}),
+                json!({"touches":self.catalog().touches.iter().filter(|(_,t)|t["user"]==actor).map(|(id,t)| json!({"id":id,"product":t["product"],"time":t["time"],"code":t["code"]})).collect::<Vec<_>>(),"disputes":self.catalog().disputes.values().filter(|d|d["owner"]==actor).collect::<Vec<_>>()}),
             ),
             "catalog_notifications" => Ok(json!(
-                self.catalog
+                self.catalog()
                     .notifications
                     .iter()
                     .filter(|n| n["recipient"] == actor)
@@ -74,8 +76,8 @@ impl State {
             _ => Err(not_found()),
         }
     }
-    pub fn visible_release(&self, id: &str, now: i64) -> Result<Value> {
-        let p = self.catalog.products.get(id).ok_or(not_found())?;
+    fn visible_release(&self, id: &str, now: i64) -> Result<Value> {
+        let p = self.catalog().products.get(id).ok_or(not_found())?;
         if p["archived"] == true || p["offline"] == true {
             return Err(Failure("TARGET_UNAVAILABLE", "产品已下架或归档"));
         }
@@ -93,7 +95,7 @@ impl State {
         self.validate_content(&r["content"], now, true)?;
         Ok(r.clone())
     }
-    pub fn public_catalog(&self, query: &Value, now: i64) -> Result<Value> {
+    fn public_catalog(&self, query: &Value, now: i64) -> Result<Value> {
         let keyword = query["keyword"].as_str().unwrap_or("").to_lowercase();
         if keyword.len() > 256 {
             return Err(invalid("关键词过长"));
@@ -110,7 +112,7 @@ impl State {
             return Err(invalid("佣金筛选范围无效"));
         }
         let mut products = Vec::new();
-        for id in self.catalog.products.keys() {
+        for id in self.catalog().products.keys() {
             if let Ok(r) = self.visible_release(id, now) {
                 let c = &r["content"];
                 let matching: Vec<_> = c["tasks"]
@@ -166,7 +168,7 @@ impl State {
             _ => return Err(invalid("排序方式无效")),
         }
         let mut categories: Vec<Value> = self
-            .catalog
+            .catalog()
             .categories
             .values()
             .filter(|c| c["enabled"] == true)
@@ -175,6 +177,7 @@ impl State {
         categories.sort_by(|a, b| {
             (a["sort"].as_i64(), a["id"].as_str()).cmp(&(b["sort"].as_i64(), b["id"].as_str()))
         });
-        Ok(json!({"products":products,"categories":categories,"revision":self.catalog.revision}))
+        Ok(json!({"products":products,"categories":categories,"revision":self.catalog().revision}))
     }
 }
+impl<T: DomainPort + ?Sized> QueriesRules for T {}

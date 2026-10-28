@@ -1,4 +1,5 @@
-use crate::platform::domain::State;
+use super::BehaviorRules;
+use crate::identity::south::port::DomainPort;
 use crate::shared::{Result, text};
 use serde_json::Value;
 pub(crate) fn validate_input(action: &str, input: &Value) -> Result<()> {
@@ -7,7 +8,12 @@ pub(crate) fn validate_input(action: &str, input: &Value) -> Result<()> {
     }
     Ok(())
 }
-pub(crate) fn access(state: &State, actor: &str, action: &str, input: &Value) -> Result<()> {
+pub(crate) fn access<P: DomainPort + ?Sized>(
+    state: &P,
+    actor: &str,
+    action: &str,
+    input: &Value,
+) -> Result<()> {
     match action {
         "access" | "restriction" => {
             state.authorize(actor, "identity_reviewer", text(input, "user_id")?)

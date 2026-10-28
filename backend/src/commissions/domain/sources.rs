@@ -1,11 +1,17 @@
 use super::{MAX, require};
-use crate::{platform::domain::State, shared::Result};
+use crate::commissions::south::port::DomainPort;
+use crate::shared::Result;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 // Attribute holds to their exact confirmation/adjustment sources; unrelated numbers remain usable.
-pub fn sources(s: &State, owner: &str) -> Result<BTreeMap<String, i64>> {
+pub fn sources<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<BTreeMap<String, i64>> {
     let mut totals: BTreeMap<String, i128> = BTreeMap::new();
-    for e in s.commissions.entries.iter().filter(|e| e["owner"] == owner) {
+    for e in s
+        .commissions()
+        .entries
+        .iter()
+        .filter(|e| e["owner"] == owner)
+    {
         let n = i128::from(e["amount_cents"].as_i64().unwrap_or(0));
         let kind = e["kind"].as_str().unwrap_or("");
         if matches!(
@@ -39,7 +45,7 @@ pub fn sources(s: &State, owner: &str) -> Result<BTreeMap<String, i64>> {
         })
         .collect()
 }
-pub fn allocate(s: &State, owner: &str, n: i64) -> Result<Value> {
+pub fn allocate<P: DomainPort + ?Sized>(s: &P, owner: &str, n: i64) -> Result<Value> {
     let mut left = n;
     let mut rows = vec![];
     for (source, available) in sources(s, owner)? {
@@ -55,20 +61,20 @@ pub fn allocate(s: &State, owner: &str, n: i64) -> Result<Value> {
     require(left == 0, "缺少可核对的有效佣金来源")?;
     Ok(json!(rows))
 }
-pub fn hold_sources(s: &State, id: &str) -> Value {
-    s.commissions
+pub fn hold_sources<P: DomainPort + ?Sized>(s: &P, id: &str) -> Value {
+    s.commissions()
         .entries
         .iter()
         .find(|e| e["key"] == format!("withdrawal:{id}:hold"))
         .map(|e| e["detail"]["sources"].clone())
         .unwrap_or(json!([]))
 }
-pub fn source_disputed(s: &State, app: &Value) -> bool {
+pub fn source_disputed<P: DomainPort + ?Sized>(s: &P, app: &Value) -> bool {
     hold_sources(s, app["id"].as_str().unwrap_or(""))
         .as_array()
         .is_some_and(|rows| {
             rows.iter().any(|row| {
-                s.commissions.disputes.values().any(|d| {
+                s.commissions().disputes.values().any(|d| {
                     d["owner"] == app["owner"]
                         && d["source"] == row["source"]
                         && d["status"] == "open"

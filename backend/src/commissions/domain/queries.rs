@@ -1,17 +1,20 @@
 use super::{MAX, require};
-use crate::{
-    platform::domain::State,
-    shared::{Failure, Result},
-};
+use crate::commissions::south::port::DomainPort;
+use crate::shared::{Failure, Result};
 use serde_json::{Value, json};
-pub fn summary(s: &State, owner: &str) -> Result<Value> {
+pub fn summary<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<Value> {
     let mut confirmed = 0_i128;
     let mut held = 0_i128;
     let mut settled = 0_i128;
     let mut disputed = 0_i128;
     let mut pending = 0_i128;
     let mut version = 0_u64;
-    for e in s.commissions.entries.iter().filter(|e| e["owner"] == owner) {
+    for e in s
+        .commissions()
+        .entries
+        .iter()
+        .filter(|e| e["owner"] == owner)
+    {
         version += 1;
         let n = i128::from(
             e["amount_cents"]
@@ -32,7 +35,7 @@ pub fn summary(s: &State, owner: &str) -> Result<Value> {
             _ => {}
         }
     }
-    for t in s.tasks.instances.values().filter(|t| {
+    for t in s.tasks_instances().values().filter(|t| {
         t["owner"] == owner
             && matches!(
                 t["status"].as_str(),
@@ -49,8 +52,7 @@ pub fn summary(s: &State, owner: &str) -> Result<Value> {
         "汇总超出安全整数范围",
     )?;
     let applications: i128 = s
-        .withdrawals
-        .applications
+        .withdrawals_applications()
         .values()
         .filter(|a| {
             a["owner"] == owner
@@ -65,20 +67,18 @@ pub fn summary(s: &State, owner: &str) -> Result<Value> {
     let valid_sources = source_totals.values().all(|n| *n >= 0)
         && source_totals.values().map(|n| i128::from(*n)).sum::<i128>() == available;
     let valid_confirmations = s
-        .tasks
-        .confirmations
+        .tasks_confirmations()
         .iter()
         .filter(|(_, c)| c["owner"] == owner)
         .all(|(id, c)| c["claim_id"] == id.as_str());
     let valid_holds = s
-        .withdrawals
-        .applications
+        .withdrawals_applications()
         .values()
         .filter(|a| a["owner"] == owner)
         .all(|a| {
             let id = a["id"].as_str().unwrap_or("");
             let held = s
-                .commissions
+                .commissions()
                 .entries
                 .iter()
                 .filter(|e| e["owner"] == owner && e["source"] == id)
@@ -112,7 +112,12 @@ pub fn summary(s: &State, owner: &str) -> Result<Value> {
         json!({"owner":owner,"currency":"CNY","version":version,"pending_cents":pending as i64,"confirmed_cents":confirmed as i64,"available_cents":available as i64,"held_cents":held as i64,"disputed_cents":disputed as i64,"settled_cents":settled as i64,"consistent":consistent,"notice":"仅为平台佣金标记数字，非存款余额；付款由人员线下处理"}),
     )
 }
-pub fn read(s: &State, actor: &str, section: &str, target: &str) -> Result<Value> {
+pub fn read<P: DomainPort + ?Sized>(
+    s: &P,
+    actor: &str,
+    section: &str,
+    target: &str,
+) -> Result<Value> {
     s.user(actor)?;
     let (owner, cursor, kind) = if section == "commission_source" {
         let (owner, source) = target
@@ -143,7 +148,7 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str) -> Result<Value
         "commission_summary" => summary(s, owner),
         "commission_source" => {
             let records: Vec<_> = s
-                .commissions
+                .commissions()
                 .entries
                 .iter()
                 .filter(|e| e["owner"] == owner && (e["source"] == kind || e["id"] == kind))
@@ -151,8 +156,8 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str) -> Result<Value
             if records.is_empty() {
                 return Err(Failure("NOT_FOUND", "该用户没有对应数字来源"));
             }
-            let task=s.tasks.instances.get(kind).filter(|t|t["owner"]==owner).map(|t|json!({"id":kind,"product_id":t["product_id"],"status":t["status"],"price":t["price"],"calculation":s.tasks.confirmations.get(kind).map(|c|c["calculation"].clone())}));
-            let applications:Vec<_>=s.withdrawals.applications.values().filter(|a|a["owner"]==owner&&(a["id"]==kind||super::hold_sources(s,a["id"].as_str().unwrap_or("")).as_array().is_some_and(|sources|sources.iter().any(|r|r["source"]==kind)))).map(|a|json!({"id":a["id"],"status":a["status"],"amount_cents":a["amount_cents"],"rule_version":a["rule"]["version"],"receipt_version":a["receipt_snapshot"]["version"]})).collect();
+            let task=s.tasks_instances().get(kind).filter(|t|t["owner"]==owner).map(|t|json!({"id":kind,"product_id":t["product_id"],"status":t["status"],"price":t["price"],"calculation":s.tasks_confirmations().get(kind).map(|c|c["calculation"].clone())}));
+            let applications:Vec<_>=s.withdrawals_applications().values().filter(|a|a["owner"]==owner&&(a["id"]==kind||super::hold_sources(s,a["id"].as_str().unwrap_or("")).as_array().is_some_and(|sources|sources.iter().any(|r|r["source"]==kind)))).map(|a|json!({"id":a["id"],"status":a["status"],"amount_cents":a["amount_cents"],"rule_version":a["rule"]["version"],"receipt_version":a["receipt_snapshot"]["version"]})).collect();
             Ok(
                 json!({"owner":owner,"source":kind,"task":task,"applications":applications,"records":records}),
             )
@@ -160,7 +165,7 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str) -> Result<Value
         "commission_entries" => {
             // Index is an append-only high-water cursor, unaffected by newer inserted events.
             let rows: Vec<_> = s
-                .commissions
+                .commissions()
                 .entries
                 .iter()
                 .enumerate()
@@ -178,18 +183,18 @@ pub fn read(s: &State, actor: &str, section: &str, target: &str) -> Result<Value
                 None
             };
             Ok(
-                json!({"items":items,"next_cursor":next,"total":s.commissions.entries.iter().filter(|e|e["owner"]==owner&&(kind.is_empty()||e["kind"]==kind)).count()}),
+                json!({"items":items,"next_cursor":next,"total":s.commissions().entries.iter().filter(|e|e["owner"]==owner&&(kind.is_empty()||e["kind"]==kind)).count()}),
             )
         }
         "commission_proposals" => Ok(json!(
-            s.commissions
+            s.commissions()
                 .proposals
                 .values()
                 .filter(|p| p["owner"] == owner || p["new_owner"] == owner)
                 .collect::<Vec<_>>()
         )),
         "commission_disputes" => Ok(json!(
-            s.commissions
+            s.commissions()
                 .disputes
                 .values()
                 .filter(|p| p["owner"] == owner)

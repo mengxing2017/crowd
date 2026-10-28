@@ -1,7 +1,7 @@
 use crate::{
     Application,
     http::{parse, request_id, response},
-    identity::south::adapter::wechat::WechatIdentity,
+    identity::south::port::wechat::WechatIdentity,
 };
 use axum::{
     Json,

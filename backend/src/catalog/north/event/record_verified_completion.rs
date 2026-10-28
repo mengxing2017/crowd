@@ -1,5 +1,5 @@
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::Repository;
+use crate::catalog::south::port::Repository;
+use crate::shared::{Failure, Result};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -8,8 +8,10 @@ pub struct RecordVerifiedCompletion {
 }
 
 impl RecordVerifiedCompletion {
-    pub fn new(repo: Repository) -> Self {
-        Self { repo }
+    pub fn new(pool: sqlx::PgPool) -> Self {
+        Self {
+            repo: Repository { pool },
+        }
     }
 
     pub async fn execute(

@@ -1,4 +1,7 @@
-use crowd_api::{identity::domain::User, platform::domain::State, promotion::domain::Code};
+use crowd_api::{
+    identity::south::port::rules::User, platform::south::port::rules::State,
+    promotion::south::port::rules::Code,
+};
 use serde_json::{Value, json};
 
 fn state() -> State {

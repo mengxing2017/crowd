@@ -11,3 +11,10 @@ mod validation;
 
 pub use dispatch::{is_command, is_read};
 pub use model::Catalog;
+
+pub use access::AccessRules;
+pub use attribution::AttributionRules;
+pub use commands::CommandsRules;
+pub use lifecycle::LifecycleRules;
+pub use queries::QueriesRules;
+pub use validation::ValidationRules;

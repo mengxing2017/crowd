@@ -1,8 +1,9 @@
 use super::validation::{not_found, num};
-use crate::platform::domain::{Failure, Result, State, invalid};
+use crate::catalog::south::port::DomainPort;
+use crate::shared::{Failure, Result, invalid};
 use serde_json::{Value, json};
 
-impl crate::catalog::south::port::CompletionRecorder for State {
+impl<T: DomainPort + ?Sized> crate::catalog::south::port::CompletionRecorder for T {
     fn record_completion(
         &mut self,
         source: &str,
@@ -14,13 +15,13 @@ impl crate::catalog::south::port::CompletionRecorder for State {
             return Err(invalid("事件来源或事件编号无效"));
         }
         let key = serde_json::to_string(&(source, event)).unwrap();
-        if let Some(previous) = self.catalog.completions.get(&key) {
+        if let Some(previous) = self.catalog().completions.get(&key) {
             if previous["claim_id"] != claim || previous["occurred_at"] != occurred_at {
                 return Err(Failure("IDEMPOTENCY_CONFLICT", "完成事件内容冲突"));
             }
             return Ok(previous.clone());
         }
-        let c = self.catalog.claims.get(claim).ok_or(not_found())?;
+        let c = self.catalog().claims.get(claim).ok_or(not_found())?;
         if occurred_at < num(c, "locked_at")? || occurred_at > num(c, "submit_until")? {
             return Err(invalid("完成事件不在任务有效期限内"));
         }
@@ -33,14 +34,14 @@ impl crate::catalog::south::port::CompletionRecorder for State {
         let value = json!({"claim_id":claim,"source":source,"event_id":event,"occurred_at":occurred_at,"attribution":if within {c["touch"].clone()} else {Value::Null},"status":if within {"attributed"} else {"outside_window"},"commission_created":false});
         // A second source/event cannot create another effective attribution for the same claim.
         if self
-            .catalog
+            .catalog()
             .completions
             .values()
             .any(|v| v["claim_id"] == claim)
         {
             return Err(Failure("ALREADY_COMPLETED", "此任务已有完成归因记录"));
         }
-        self.catalog.completions.insert(key, value.clone());
+        self.catalog_mut().completions.insert(key, value.clone());
         Ok(value)
     }
 }

@@ -1,4 +1,6 @@
-use crowd_api::{platform::domain::State, withdrawals::domain as withdrawals};
+use crowd_api::{
+    platform::south::port::rules::State, withdrawals::south::port::rules as withdrawals,
+};
 use serde_json::{Value, json};
 fn setup() -> State {
     let mut s = State::default();

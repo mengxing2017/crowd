@@ -1,5 +1,5 @@
-use crate::platform::domain::{Failure, Result};
-use crate::platform::south::adapter::postgres::Repository;
+use crate::shared::{Failure, Result};
+use crate::tasks::south::port::Repository;
 use crate::tasks::south::port::VerifiedTaskResult;
 use serde_json::Value;
 
@@ -9,8 +9,10 @@ pub struct RecordVerifiedTaskResult {
 }
 
 impl RecordVerifiedTaskResult {
-    pub fn new(repo: Repository) -> Self {
-        Self { repo }
+    pub fn new(pool: sqlx::PgPool) -> Self {
+        Self {
+            repo: Repository { pool },
+        }
     }
 
     pub async fn execute(

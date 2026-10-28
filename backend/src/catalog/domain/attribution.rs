@@ -1,8 +1,10 @@
-use crate::platform::domain::{Failure, Result, State, invalid, text};
+use super::*;
+use crate::catalog::south::port::DomainPort;
+use crate::shared::{Failure, Result, invalid, text};
 use serde_json::{Value, json};
 
-impl State {
-    pub fn collect_touch(&mut self, input: &Value, generated: &str, now: i64) -> Result<Value> {
+pub trait AttributionRules: DomainPort {
+    fn collect_touch(&mut self, input: &Value, generated: &str, now: i64) -> Result<Value> {
         // Deliberately no user/promoter input. Ownership is derived from an active server code.
         let object = input.as_object().ok_or(invalid("请求必须为对象"))?;
         if object
@@ -14,12 +16,12 @@ impl State {
         let code = text(input, "code")?;
         text(input, "scene")?;
         let c = self
-            .codes
+            .codes()
             .get(code)
             .cloned()
             .ok_or(Failure("CODE_UNAVAILABLE", "推广码无效，请返回产品列表"))?;
         if !c.active
-            || self.users.get(&c.owner).is_none_or(|u| {
+            || self.users().get(&c.owner).is_none_or(|u| {
                 u.status != "active" || u.restrictions.iter().any(|r| r["scope"] == "promotion")
             })
         {
@@ -37,14 +39,14 @@ impl State {
                 return Err(Failure("TARGET_UNAVAILABLE", "推广任务已停用"));
             }
         }
-        self.catalog.touches.insert(generated.into(),json!({"id":generated,"code":code,"code_version":c.version,"promoter":c.owner,"product":c.product,"task":c.task,"scene":input["scene"],"time":now,"user":null}));
+        self.catalog_mut().touches.insert(generated.into(),json!({"id":generated,"code":code,"code_version":c.version,"promoter":c.owner,"product":c.product,"task":c.task,"scene":input["scene"],"time":now,"user":null}));
         Ok(
             json!({"touch_token":generated,"product":c.product,"task":c.task,"notice":"访问不占名额，也不产生佣金数字"}),
         )
     }
-    pub fn bind_touch(&mut self, actor: &str, token: &str, now: i64) -> Result<Value> {
+    fn bind_touch(&mut self, actor: &str, token: &str, now: i64) -> Result<Value> {
         let t = self
-            .catalog
+            .catalog_mut()
             .touches
             .get_mut(token)
             .ok_or(Failure("TOUCH_INVALID", "触点不存在"))?;
@@ -58,7 +60,7 @@ impl State {
         t["user"] = json!(actor);
         Ok(json!({"status":"bound"}))
     }
-    pub(super) fn select_touch(
+    fn select_touch(
         &self,
         actor: &str,
         product: &str,
@@ -68,7 +70,7 @@ impl State {
     ) -> Option<Value> {
         let window = policy["window_seconds"].as_i64()?;
         let mut touches: Vec<_> = self
-            .catalog
+            .catalog()
             .touches
             .values()
             .filter(|t| {
@@ -91,3 +93,4 @@ impl State {
         .map(|t| (*t).clone())
     }
 }
+impl<T: DomainPort + ?Sized> AttributionRules for T {}

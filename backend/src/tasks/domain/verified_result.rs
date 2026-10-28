@@ -1,8 +1,9 @@
-use crate::platform::domain::{Result, State};
+use crate::shared::Result;
+use crate::tasks::south::port::DomainPort;
 use crate::tasks::south::port::VerifiedTaskResult;
 use serde_json::Value;
 
-impl VerifiedTaskResult for State {
+impl<T: DomainPort + ?Sized> VerifiedTaskResult for T {
     fn record_task_result(
         &mut self,
         source: &str,
@@ -11,7 +12,7 @@ impl VerifiedTaskResult for State {
         occurred_at: i64,
         base_cents: Option<i64>,
     ) -> Result<Value> {
-        use crate::platform::domain::{Failure, invalid};
+        use crate::shared::{Failure, invalid};
         if source.is_empty()
             || source.len() > 128
             || event.is_empty()
@@ -21,7 +22,7 @@ impl VerifiedTaskResult for State {
             return Err(invalid("可信成果参数错误"));
         }
         let t = self
-            .tasks
+            .tasks()
             .instances
             .get(claim)
             .ok_or(Failure("NOT_FOUND", "任务不存在"))?;
@@ -37,21 +38,21 @@ impl VerifiedTaskResult for State {
             return Err(Failure("FORBIDDEN", "成果来源与领取时模板不匹配"));
         }
         let value = serde_json::json!({"source":source,"event_id":event,"claim_id":claim,"occurred_at":occurred_at,"base_cents":base_cents});
-        if let Some(old) = self.tasks.verified_results.get(claim) {
+        if let Some(old) = self.tasks().verified_results.get(claim) {
             if old == &value {
                 return Ok(old.clone());
             }
             return Err(Failure("IDEMPOTENCY_CONFLICT", "任务已有不同可信成果"));
         }
         if self
-            .tasks
+            .tasks()
             .verified_results
             .values()
             .any(|v| v["source"] == source && v["event_id"] == event)
         {
             return Err(Failure("IDEMPOTENCY_CONFLICT", "来源事件已用于其他任务"));
         }
-        self.tasks
+        self.tasks_mut()
             .verified_results
             .insert(claim.into(), value.clone());
         Ok(value)
