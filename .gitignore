@@ -18,3 +18,6 @@ report/
 # Browser validation artifacts
 frontend/apps/web/test-results/
 frontend/apps/web/playwright-report/
+
+# Documentation build cache
+docs/.vitepress/cache/

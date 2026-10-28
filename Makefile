@@ -1,4 +1,4 @@
-.PHONY: install check check-web check-backend test-unit api-dev api-external dev-embedded test-embedded test-business web-dev miniapp-dev compose-up compose-down
+.PHONY: docs-install docs-dev docs-build docs-preview install check check-web check-backend test-unit api-dev api-external dev-embedded test-embedded test-business web-dev miniapp-dev compose-up compose-down
 install:
 	pnpm --dir api-contract install --frozen-lockfile
 	pnpm --dir frontend install --frozen-lockfile
@@ -32,3 +32,12 @@ compose-up:
 	docker compose --env-file .env -f compose.yaml -f compose.dev.yaml up --build --wait
 compose-down:
 	docker compose --env-file .env -f compose.yaml -f compose.dev.yaml down
+
+docs-install:
+	pnpm --dir docs install --frozen-lockfile
+docs-dev:
+	pnpm --dir docs dev
+docs-build:
+	pnpm --dir docs build
+docs-preview:
+	pnpm --dir docs preview
