@@ -1,8 +1,10 @@
-import { catalog } from '../../catalog/api'
+import { catalog } from './api'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Collapse, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, Upload } from 'antd'
-import { uploadProductImage, type CatalogAdmin, type Product, type ProductContent, type ProductRelease, type User } from '../api'
-import type { Run, Save } from '../model'
+import { uploadProductImage } from '../files/api'
+import { type CatalogAdmin, type Product, type ProductContent, type ProductRelease } from './api'
+import { type User } from '../identity/api'
+import type { Run, Save } from '../platform/model'
 const required = [{ required: true, message: '请填写此项' }]
 const timestamp = (value: string) => Math.floor(new Date(value).getTime() / 1000)
 function localTime(value?: number) { if (!value) return ''; const date = new Date(value * 1000); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) }

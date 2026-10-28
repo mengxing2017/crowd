@@ -1,8 +1,9 @@
-import { tasks } from '../../tasks/api'
+import { tasks } from './api'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Descriptions, Empty, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
-import { taskStatusNames, viewEvidenceImage, type TaskInstance, type TaskPage, type TaskSubmission, type User } from '../api'
-import type { Run, Save } from '../model'
+import { taskStatusNames, viewEvidenceImage, type TaskInstance, type TaskPage, type TaskSubmission } from './api'
+import { type User } from '../identity/api'
+import type { Run, Save } from '../platform/model'
 export function Tasks({ me, busy, pending, run, save }: { me: User; busy: boolean; pending: boolean; run: Run; save: Save }) {
   const [data, setData] = useState<TaskPage>()
   const [status, setStatus] = useState<string>()

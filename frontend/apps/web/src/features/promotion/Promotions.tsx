@@ -1,15 +1,15 @@
-import { attribution } from '../../attribution/api'
+import { promotion } from './api'
 import { useState } from 'react'
 import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
-import { type Promotion } from '../api'
-import type { Run, Save } from '../model'
+import { type Promotion } from './api'
+import type { Run, Save } from '../platform/model'
 export function Promotions({ busy, pending, run, save }: { busy: boolean; pending: boolean; run: Run; save: Save }) {
   const [rows, setRows] = useState<Promotion[] | null>(null)
   const [owner, setOwner] = useState('')
   const [selected, setSelected] = useState<Promotion>()
   const [form] = Form.useForm()
-  async function load(target: string) { setRows(null); setOwner(target); setRows(await attribution.managedCodes(target)) }
+  async function load(target: string) { setRows(null); setOwner(target); setRows(await promotion.managedCodes(target)) }
   return <Space orientation="vertical" size={24} className="full-width"><Card title="推广码归属查询"><Form layout="inline" onFinish={values => { void run(() => load(String(values.target).trim())) }}><Form.Item name="target" label="所属用户" rules={[{ required: true, whitespace: true, message: '请输入用户编号' }]}><Input placeholder="输入完整用户编号" style={{ width: 320, maxWidth: '100%' }} /></Form.Item><Form.Item><Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={busy}>查询推广码</Button></Form.Item></Form></Card>
     <Alert showIcon type="info" title="个人推广码与收款二维码分别管理" description="推广码保持唯一归属，撤销换发保留历史。扫码只记录入口，不代表任务完成或可申请佣金。" />
     <Card title="推广码列表"><Table<Promotion> rowKey="id" loading={busy} dataSource={rows || []} scroll={{ x: 760 }} locale={{ emptyText: rows === null ? '请先查询所属用户' : '该用户暂无推广码' }} columns={[

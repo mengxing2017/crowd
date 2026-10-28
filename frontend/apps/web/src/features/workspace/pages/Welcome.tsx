@@ -1,7 +1,9 @@
 import { ArrowRightOutlined, BookOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Col, Descriptions, Row, Space, Statistic, Steps, Tag, Typography } from 'antd'
-import type { Rule, User } from '../api'
-import { roleNames, sections, type Section } from '../model'
+import { type Rule } from '../../governance/api'
+import { type User } from '../../identity/api'
+import { roleNames } from '../../identity/model'
+import { sections, type Section } from '../model'
 export function Welcome({ me, rules, navigate }: { me: User; rules: Rule[]; navigate: (section: Section) => void }) {
   const available = sections.filter(section => section.role && me.roles.includes(section.role))
   return <Space orientation="vertical" size={24} className="full-width">

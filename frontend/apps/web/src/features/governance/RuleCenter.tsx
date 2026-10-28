@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Collapse, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd'
-import type { Rule } from '../api'
-import { ruleKinds, statuses, type Save } from '../model'
+import { type Rule } from './api'
+import { ruleKinds, statuses } from './model'
+import { type Save } from '../platform/model'
 export function RuleCenter({ rules, busy, pending, save }: { rules: Rule[]; busy: boolean; pending: boolean; save: Save }) {
   const [kind, setKind] = useState<string>()
   const [status, setStatus] = useState<string>()

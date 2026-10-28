@@ -1,9 +1,10 @@
-import { identity } from '../identity/api'
+import { identity } from './api'
 import { useState } from 'react'
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
 import { LoginForm, ProFormText } from '@ant-design/pro-components'
 import { Alert, Form, Tabs, Typography } from 'antd'
-import { setToken, type Login } from './api'
+import { setToken } from '../session/api'
+import { type Login } from './api'
 interface Credentials { username: string; password: string; ticket: string }
 export function AdminLogin({ onAuthenticated, initialError }: { onAuthenticated: (session: Login) => Promise<void>; initialError?: string }) {
   const [mode, setMode] = useState('password')

@@ -1,8 +1,9 @@
-import { tasks } from '../../tasks/api'
+import { tasks } from './api'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Collapse, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tabs, Typography } from 'antd'
-import { type TaskRules as Rules, type User, type VersionedTaskRule, type PriceRule, type TaskTemplate } from '../api'
-import type { Run, Save } from '../model'
+import { type TaskRules as Rules, type VersionedTaskRule, type PriceRule, type TaskTemplate } from './api'
+import { type User } from '../identity/api'
+import type { Run, Save } from '../platform/model'
 const required = [{ required: true, message: '请明确填写此项' }]
 const kinds = (values: string[]) => values.map(value => ({ value, label: value }))
 const split = (v?: string) => (v || '').split(/[，,\n]/).map(s => s.trim()).filter(Boolean)

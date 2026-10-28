@@ -3,7 +3,7 @@ import { attribution } from '../attribution/api'
 import { useEffect, useRef, useState } from 'react'
 import { CopyOutlined, QrcodeOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Empty, Result, Space, Spin, Typography } from 'antd'
-import { type PublicCatalog } from './api'
+import { type PublicCatalog } from '../catalog/api'
 export function Landing({ code }: { code: string | null }) {
   const [notice, setNotice] = useState('')
   const [state, setState] = useState<'loading' | 'valid' | 'error' | 'catalog'>(code === null ? 'catalog' : 'loading')

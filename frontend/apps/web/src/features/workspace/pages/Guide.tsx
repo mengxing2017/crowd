@@ -1,5 +1,5 @@
 import { Alert, Card, Collapse, Space, Steps, Table, Typography } from 'antd'
-import { roleNames } from '../model'
+import { roleNames } from '../../identity/model'
 const responsibilities: Record<string, string> = { rule_manager: '维护业务规则、保存草稿、发布与停用版本', identity_reviewer: '查询用户状态、配置岗位与数据范围、设置业务限制', promotion_manager: '按所属用户查询推广码，经审批后撤销并换发', auditor: '按对象查询操作、请求编号、规则版本与结果' }
 export function Guide() {
   return <Space orientation="vertical" size={24} className="full-width"><Card title="欢迎使用 Crowd 运营管理平台"><Typography.Paragraph>这里集中管理业务规则、用户岗位与推广记录。左侧导航根据当前岗位展示入口；每次查询和提交仍由服务端检查身份、对象范围与状态。</Typography.Paragraph><Alert type="info" showIcon title="当前开放 M01–M12 业务能力" description="身份与资料、推广归因、产品发布、独立定价与模板审批、任务执行、私有证据提交、审核及质量复核。审核通过记录数字确认，数字入账、可申请余额、佣金申请和人工结算仍待后续接入。" /></Card>

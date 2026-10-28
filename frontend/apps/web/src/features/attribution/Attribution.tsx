@@ -1,8 +1,9 @@
-import { attribution } from '../../attribution/api'
+import { attribution } from './api'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Statistic, Table, Tag } from 'antd'
-import { type AttributionAdmin, type AttributionDispute, type User } from '../api'
-import type { Run, Save } from '../model'
+import { type AttributionAdmin, type AttributionDispute } from './api'
+import { type User } from '../identity/api'
+import type { Run, Save } from '../platform/model'
 export function Attribution({ me, busy, pending, run, save }: { me: User; busy: boolean; pending: boolean; run: Run; save: Save }) {
   const [data, setData] = useState<AttributionAdmin>()
   const [dispute, setDispute] = useState<AttributionDispute>()
