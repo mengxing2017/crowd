@@ -43,6 +43,22 @@ impl ExecuteCommand {
                 return Err(Failure("IDEMPOTENCY_CONFLICT", "同一请求键内容不同"));
             }
             let result = previous["result"].clone();
+            if action == "withdrawal_receipt_reveal" {
+                let now = Repository::time(&mut tx).await?;
+                state.log(
+                    &actor,
+                    action,
+                    input["id"].as_str().unwrap_or(""),
+                    request,
+                    &now,
+                );
+                if let Some(log) = state.audit.last_mut() {
+                    log["reason"] = input["reason"].clone();
+                }
+                Repository::save(&mut tx, &state).await?;
+                Repository::commit(tx).await?;
+                return Ok(result);
+            }
             if crate::tasks::north::local::audit_replay(
                 &mut tx, &mut state, &actor, action, input, request,
             )

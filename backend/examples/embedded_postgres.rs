@@ -107,6 +107,8 @@ async fn run_business_tests(postgres: &PostgreSQL) -> Result<(), Box<dyn std::er
         .args([
             "--test",
             "community_postgres",
+            "--test",
+            "finance_postgres",
             "--",
             "--ignored",
             "--nocapture",

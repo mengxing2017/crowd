@@ -1050,7 +1050,7 @@ async fn tasks_flow(service: &Service, alice: &str, bob: &str, alice_id: &str, b
         state.tasks.confirmations[id]["calculation"]["amount_cents"],
         101
     );
-    assert_eq!(state.tasks.confirmations[id]["withdrawable"], false);
+    assert_eq!(state.tasks.confirmations[id]["withdrawable"], true);
     assert!(
         state
             .audit

@@ -42,6 +42,15 @@ impl State {
         })
     }
     pub fn check_command_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
+        if crate::commissions::domain::is_command(action) {
+            return crate::commissions::domain::access(self, actor, action, input);
+        }
+        if crate::withdrawals::domain::is_command(action) {
+            return crate::withdrawals::domain::access(self, actor, action, input);
+        }
+        if crate::settlements::domain::is_command(action) {
+            return crate::settlements::domain::access(self, actor, action, input);
+        }
         if crate::tasks::domain::is_command(action) {
             return self.tasks_access(actor, action, input);
         }

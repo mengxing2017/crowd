@@ -22,6 +22,37 @@ pub(super) async fn apply(
         crate::identity::north::local::session_command(tx, token, actor, action).await?
     } else if action == "receipt_reveal" {
         crate::receipts::north::local::reveal(state, actor, input, request, now)?
+    } else if crate::commissions::domain::is_command(action) {
+        crate::commissions::north::local::apply(state, context)?
+    } else if crate::withdrawals::domain::is_command(action) {
+        if matches!(action, "withdrawal_preview" | "withdrawal_apply") {
+            let u = state.user(actor)?;
+            if let Some(r) = u
+                .receipts
+                .iter()
+                .find(|r| r["id"] == input["receipt_id"] && r["method"] == "wechat")
+            {
+                crate::platform::south::adapter::postgres::Repository::validate_file(
+                    tx,
+                    crate::shared::text(r, "file_id")?,
+                    actor,
+                    "wechat_receipt",
+                )
+                .await?;
+            }
+        }
+        crate::withdrawals::north::local::apply(state, context)?
+    } else if crate::settlements::domain::is_command(action) {
+        if action == "settlement_register" {
+            crate::platform::south::adapter::postgres::Repository::validate_file(
+                tx,
+                crate::shared::text(input, "voucher_file_id")?,
+                actor,
+                "settlement_voucher",
+            )
+            .await?;
+        }
+        crate::settlements::north::local::apply(state, context)?
     } else if crate::tasks::domain::is_command(action) {
         crate::tasks::north::local::apply_command(tx, state, context).await?
     } else if crate::catalog::domain::is_command(action) {

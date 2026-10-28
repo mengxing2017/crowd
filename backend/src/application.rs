@@ -24,6 +24,7 @@ pub struct ApplicationServices {
     pub agreements: ReadAgreements,
     pub promotions: ResolvePromotion,
     pub queries: ReadResource,
+    pub withdrawal_failure_context: crate::withdrawals::north::local::ReadWithdrawalFailureContext,
     pub commands: ExecuteCommand,
     pub uploads: UploadFile,
     pub private_files: ReadPrivateFile,
@@ -34,6 +35,7 @@ pub struct ApplicationServices {
     pub product_images: ReadProductImage,
     pub verified_completions: RecordVerifiedCompletion,
     pub verified_task_results: RecordVerifiedTaskResult,
+    pub sensitive_files: crate::files::north::local::ReadSensitiveFile,
     pub evidence_files: ReadEvidenceFile,
 }
 
@@ -45,6 +47,8 @@ impl ApplicationServices {
             agreements: ReadAgreements::new(repo.clone()),
             promotions: ResolvePromotion::new(repo.clone()),
             queries: ReadResource::new(repo.clone()),
+            withdrawal_failure_context:
+                crate::withdrawals::north::local::ReadWithdrawalFailureContext::new(repo.clone()),
             commands: ExecuteCommand::new(repo.clone()),
             uploads: UploadFile::new(repo.clone()),
             private_files: ReadPrivateFile::new(repo.clone()),
@@ -55,6 +59,7 @@ impl ApplicationServices {
             product_images: ReadProductImage::new(repo.clone()),
             verified_completions: RecordVerifiedCompletion::new(repo.clone()),
             verified_task_results: RecordVerifiedTaskResult::new(repo.clone()),
+            sensitive_files: crate::files::north::local::ReadSensitiveFile::new(repo.clone()),
             evidence_files: ReadEvidenceFile::new(repo.clone()),
         }
     }

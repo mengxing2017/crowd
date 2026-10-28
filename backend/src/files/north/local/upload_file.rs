@@ -28,6 +28,12 @@ impl UploadFile {
         if purpose == "product_image" {
             state.authorize(&actor, "operator", "platform")?;
         }
+        if purpose == "settlement_voucher" {
+            let user = state.user(&actor)?;
+            if !user.roles.iter().any(|r| r == "manual_handler") || user.scope.is_empty() {
+                return Err(Failure("FORBIDDEN", "仅授权人工经办可上传私有凭证"));
+            }
+        }
         let task_id = purpose.strip_prefix("task_evidence:");
         let size = bytes.len();
         crate::tasks::domain::validate_upload(&state, &actor, purpose, size)?;

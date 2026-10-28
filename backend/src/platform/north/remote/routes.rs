@@ -6,6 +6,9 @@ use axum::{
 };
 pub fn routes() -> Router<Application> {
     Router::new()
+        .merge(crate::commissions::north::remote::routes())
+        .merge(crate::withdrawals::north::remote::routes())
+        .merge(crate::settlements::north::remote::routes())
         .merge(crate::identity::north::remote::routes())
         .merge(crate::receipts::north::remote::routes())
         .merge(crate::promotion::north::remote::routes())

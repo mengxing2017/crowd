@@ -8,7 +8,7 @@ pub(crate) fn read(state: &State, actor: &str, section: &str, target: &str) -> R
             if target != actor {
                 return Err(Failure(
                     "FORBIDDEN",
-                    "后台查看收款资料必须关联申请范围与用途，申请服务尚未接入",
+                    "请在申请详情关联本单范围及用途后授权查看收款快照",
                 ));
             }
             Ok(json!(

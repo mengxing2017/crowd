@@ -51,7 +51,7 @@ pub(crate) async fn file(
     };
     let result = if let Some(reason) = query.reason {
         app.services
-            .evidence_files
+            .sensitive_files
             .execute(token(&headers), &id, &reason, &r)
             .await
     } else {

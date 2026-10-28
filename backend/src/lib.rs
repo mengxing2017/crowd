@@ -1,13 +1,16 @@
 mod application;
 pub mod audit;
+pub mod commissions;
 pub mod files;
 pub mod governance;
 pub mod identity;
 pub mod platform;
 pub mod promotion;
 pub mod receipts;
+pub mod settlements;
 pub mod shared;
 pub mod support;
+pub mod withdrawals;
 pub use application::ApplicationServices;
 pub mod catalog;
 pub mod community;

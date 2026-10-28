@@ -256,7 +256,7 @@ fn exclusive_review_withdrawal_sensitive_access_and_single_confirmation() {
     assert_eq!(result["status"], "approved");
     assert_eq!(s.tasks.confirmations.len(), 1);
     assert_eq!(s.tasks.changes.len(), 1);
-    assert_eq!(s.tasks.confirmations["a"]["withdrawable"], false);
+    assert_eq!(s.tasks.confirmations["a"]["withdrawable"], true);
     assert!(s.tasks_command("reviewer","review_decide",&json!({"id":"a","version":result["version"],"decision":"approve","reason":"重复","checklist_confirmed":true}),"x",126).is_err());
 }
 #[test]

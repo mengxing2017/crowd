@@ -30,7 +30,15 @@ impl Repository {
         purpose: &str,
         bytes: Vec<u8>,
     ) -> Result<Value> {
-        if !["avatar", "wechat_receipt", "product_image", "task_evidence"].contains(&purpose) {
+        if ![
+            "avatar",
+            "wechat_receipt",
+            "product_image",
+            "task_evidence",
+            "settlement_voucher",
+        ]
+        .contains(&purpose)
+        {
             return Err(invalid("文件用途无效"));
         }
         // Engineering resource ceiling, not a confirmed business image policy.

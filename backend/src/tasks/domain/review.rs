@@ -26,7 +26,7 @@ impl State {
         let calculation = calculate(&t["price"], base)?;
         let reserved = t["reserved_cents"].clone();
         t["reserved_cents"] = calculation["amount_cents"].clone();
-        let confirmation = json!({"id":id,"claim_id":id,"owner":t["owner"],"calculation":calculation,"previous_reservation_cents":reserved,"reservation_cents":t["reserved_cents"],"price":t["price"],"submission":t["receipt"]["id"],"confirmed_by":actor,"confirmed_at":now,"status":"pending_ledger","withdrawable":false,"external_payment":false});
+        let confirmation = json!({"id":id,"claim_id":id,"owner":t["owner"],"calculation":calculation,"previous_reservation_cents":reserved,"reservation_cents":t["reserved_cents"],"price":t["price"],"submission":t["receipt"]["id"],"confirmed_by":actor,"confirmed_at":now,"status":"confirmed","withdrawable":true,"external_payment":false});
         self.tasks
             .confirmations
             .insert(id.clone(), confirmation.clone());

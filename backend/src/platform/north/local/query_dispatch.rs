@@ -10,7 +10,31 @@ pub(super) fn read(
     now: &str,
     epoch: i64,
 ) -> Result<Value> {
-    if crate::tasks::domain::is_read(section) {
+    if matches!(
+        section,
+        "commission_source"
+            | "commission_summary"
+            | "commission_entries"
+            | "commission_proposals"
+            | "commission_disputes"
+    ) {
+        let result =
+            crate::commissions::domain::read(state, actor, section, target.unwrap_or(actor));
+        if result.is_ok() {
+            state.log(actor, section, target.unwrap_or(actor), request, now);
+        }
+        result
+    } else if matches!(
+        section,
+        "withdrawal_rules" | "my_withdrawals" | "withdrawal_queue" | "withdrawal_detail"
+    ) {
+        let result =
+            crate::withdrawals::domain::read(state, actor, section, target.unwrap_or(actor), epoch);
+        if result.is_ok() {
+            state.log(actor, section, target.unwrap_or(actor), request, now);
+        }
+        result
+    } else if crate::tasks::domain::is_read(section) {
         let result = state.tasks_read(actor, section, target.unwrap_or(actor), epoch);
         if result.is_ok() {
             state.log(actor, section, target.unwrap_or(actor), request, now);

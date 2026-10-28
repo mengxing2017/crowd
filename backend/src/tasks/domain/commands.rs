@@ -23,6 +23,7 @@ impl State {
         } else {
             self.execution_command(actor, action, input, generated, now)?
         };
+        crate::commissions::domain::sync_tasks(self, actor, now)?;
         if action != "evidence_reveal"
             && result["owner"].as_str().is_some_and(|owner| owner != actor)
         {

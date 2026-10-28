@@ -45,5 +45,19 @@ pub(crate) async fn command(
         (None, _) => Err(Failure("INVALID_INPUT", "缺少有效 Idempotency-Key")),
         (_, Err(e)) => Err(e),
     };
-    response(result, &r)
+    let details = if matches!(action, "withdrawal_apply" | "withdrawal_preview")
+        && result
+            .as_ref()
+            .err()
+            .is_some_and(|e| matches!(e.0, "VERSION_CONFLICT" | "INSUFFICIENT_AVAILABLE"))
+    {
+        app.services
+            .withdrawal_failure_context
+            .execute(token(headers), &r)
+            .await
+            .ok()
+    } else {
+        None
+    };
+    super::envelope::response_with_details(result, &r, details)
 }

@@ -15,6 +15,9 @@ fn application_use_cases_have_separate_owners_and_single_entrypoints() {
         "files",
         "catalog",
         "tasks",
+        "commissions",
+        "withdrawals",
+        "settlements",
     ] {
         let north = source.join(domain).join("north");
         assert!(!north.join("local.rs").exists());
@@ -76,6 +79,9 @@ fn http_and_workers_use_concrete_application_services() {
         "files",
         "catalog",
         "tasks",
+        "commissions",
+        "withdrawals",
+        "settlements",
     ] {
         for entry in fs::read_dir(source.join(domain).join("north/remote")).unwrap() {
             let path = entry.unwrap().path();

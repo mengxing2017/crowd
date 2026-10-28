@@ -20,6 +20,13 @@ pub(crate) fn request_id() -> String {
     )
 }
 pub(crate) fn response(result: Result<Value, Failure>, request: &str) -> Response {
+    response_with_details(result, request, None)
+}
+pub(crate) fn response_with_details(
+    result: Result<Value, Failure>,
+    request: &str,
+    details: Option<Value>,
+) -> Response {
     let (status, value) = match result {
         Ok(v) => (StatusCode::OK, json!({"data":v,"request_id":request})),
         Err(Failure(code, message)) => {
@@ -36,7 +43,7 @@ pub(crate) fn response(result: Result<Value, Failure>, request: &str) -> Respons
             };
             (
                 status,
-                json!({"error":{"code":code,"message":message,"request_id":request}}),
+                json!({"error":{"code":code,"message":message,"request_id":request,"details":details}}),
             )
         }
     };

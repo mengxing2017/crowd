@@ -22,7 +22,14 @@ impl Repository {
                 .fetch_one(&mut **tx)
                 .await
                 .map_err(database)?;
-        serde_json::from_value(v).map_err(|_| Failure("SERVICE_UNAVAILABLE", "业务记录暂不可读取"))
+        let mut state: State = serde_json::from_value(v)
+            .map_err(|_| Failure("SERVICE_UNAVAILABLE", "业务记录暂不可读取"))?;
+        crate::commissions::domain::sync_tasks(
+            &mut state,
+            "commission-reconciliation",
+            Self::epoch(tx).await?,
+        )?;
+        Ok(state)
     }
     pub async fn save(tx: &mut Transaction<'_, Postgres>, state: &State) -> Result<()> {
         Self::save_code_ownership(tx, state).await?;
