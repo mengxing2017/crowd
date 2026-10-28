@@ -1,5 +1,5 @@
-use crate::community::domain::{Failure, Result};
-use crate::community::south::adapter::postgres::Repository;
+use crate::platform::domain::{Failure, Result};
+use crate::platform::south::adapter::postgres::Repository;
 use serde_json::json;
 
 #[derive(Clone)]
@@ -22,7 +22,7 @@ impl ReadEvidenceFile {
         let mut tx = self.repo.begin().await?;
         let actor = Repository::authenticate(&mut tx, token).await?;
         let mut state = Repository::load(&mut tx).await?;
-        crate::community::domain::text(&json!({"reason":reason}), "reason")?;
+        crate::platform::domain::text(&json!({"reason":reason}), "reason")?;
         let a = state
             .tasks
             .attachments

@@ -1,5 +1,5 @@
 use super::validation::{conflict, not_found, num, public_category, strings, version};
-use crate::community::domain::{Failure, Result, State, check_version, invalid, text};
+use crate::platform::domain::{Failure, Result, State, check_version, invalid, text};
 use serde_json::{Value, json};
 
 impl State {

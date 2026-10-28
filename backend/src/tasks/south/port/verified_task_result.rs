@@ -1,4 +1,4 @@
-use crate::community::domain::Result;
+use crate::platform::domain::Result;
 use serde_json::Value;
 /// Trusted source adapter boundary. Never exposed as a user HTTP command.
 /// Adapter must authenticate/signature-check the source before invoking this port.

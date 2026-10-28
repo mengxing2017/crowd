@@ -1,4 +1,4 @@
-use crate::community::domain::{Failure, Result, invalid};
+use crate::platform::domain::{Failure, Result, invalid};
 use serde_json::Value;
 
 pub(super) fn number(v: &Value, field: &str) -> Result<i64> {

@@ -1,4 +1,4 @@
-use crate::community::domain::Failure;
+use crate::platform::domain::Failure;
 use axum::{
     Json,
     http::StatusCode,

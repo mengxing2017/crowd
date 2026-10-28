@@ -12,3 +12,5 @@ mod verified_result;
 pub use dispatch::{is_command, is_read};
 pub use model::Tasks;
 pub use rules::calculate;
+mod attachments;
+pub(crate) use attachments::{register_upload, validate_upload};

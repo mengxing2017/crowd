@@ -1,3 +1,1 @@
-pub mod domain;
-pub mod north;
-pub mod south;
+pub use crate::platform::{domain, north, south};

@@ -1,6 +1,6 @@
-use crate::community::domain::Result;
-use crate::community::domain::text;
-use crate::community::south::adapter::postgres::Repository;
+use crate::platform::domain::Result;
+use crate::platform::domain::text;
+use crate::platform::south::adapter::postgres::Repository;
 use serde_json::Value;
 
 pub struct ValidateProductFiles;
@@ -8,7 +8,7 @@ pub struct ValidateProductFiles;
 impl ValidateProductFiles {
     pub async fn execute(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        state: &crate::community::domain::State,
+        state: &crate::platform::domain::State,
         actor: &str,
         action: &str,
         input: &Value,

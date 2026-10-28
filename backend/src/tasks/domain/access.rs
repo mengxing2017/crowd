@@ -1,5 +1,5 @@
 use super::validation::{array, missing, require};
-use crate::community::domain::{Failure, Result, State, text};
+use crate::platform::domain::{Failure, Result, State, text};
 use serde_json::Value;
 
 impl State {

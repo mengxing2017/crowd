@@ -1,4 +1,4 @@
-use crate::community::domain::Failure;
+use crate::platform::domain::Failure;
 use axum::{Json, extract::rejection::JsonRejection, http::HeaderMap};
 use serde_json::Value;
 

@@ -73,7 +73,7 @@ async fn run_api(
             Some(password) => password.clone(),
             None => sqlx::query_scalar::<_, String>("SELECT encode(gen_random_bytes(24),'hex')").fetch_one(&pool).await?,
         };
-        crowd_api::community::south::adapter::postgres::Repository { pool: pool.clone() }
+        crowd_api::platform::south::adapter::postgres::Repository { pool: pool.clone() }
             .bootstrap_staff("admin", &password).await.map_err(|_| "development administrator bootstrap failed")?;
         // Keep the private temporary file as an alternative to local startup output.
         let credential_file = postgres.settings().data_dir.join("crowd-admin-credentials.txt");

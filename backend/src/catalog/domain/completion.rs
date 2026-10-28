@@ -1,5 +1,5 @@
 use super::validation::{not_found, num};
-use crate::community::domain::{Failure, Result, State, invalid};
+use crate::platform::domain::{Failure, Result, State, invalid};
 use serde_json::{Value, json};
 
 impl crate::catalog::south::port::CompletionRecorder for State {

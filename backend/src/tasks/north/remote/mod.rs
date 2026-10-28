@@ -9,3 +9,4 @@ mod rules;
 mod templates;
 
 pub use routes::routes;
+mod eligibility;

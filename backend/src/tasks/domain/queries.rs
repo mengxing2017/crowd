@@ -1,5 +1,5 @@
 use super::validation::{missing, require};
-use crate::community::domain::{Result, State, invalid, text};
+use crate::platform::domain::{Result, State, invalid, text};
 use serde_json::{Value, json};
 
 impl State {

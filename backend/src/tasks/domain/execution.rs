@@ -1,5 +1,5 @@
 use super::validation::{array, conflict, missing, next_time, number, positive, require, version};
-use crate::community::domain::{Failure, Result, State, invalid, text};
+use crate::platform::domain::{Failure, Result, State, invalid, text};
 use serde_json::{Value, json};
 
 fn editable(t: &Value, now: i64) -> Result<()> {

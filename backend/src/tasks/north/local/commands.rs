@@ -1,5 +1,5 @@
-use crate::community::south::adapter::postgres::Repository;
-use crate::community::{
+use crate::platform::south::adapter::postgres::Repository;
+use crate::platform::{
     domain::{Failure, Result, State},
     north::local::CommandContext,
 };
@@ -22,7 +22,7 @@ pub(crate) async fn apply(
     } = *context;
     let result = state.tasks_command(actor, action, input, generated, epoch)?;
     if action == "evidence_discard" {
-        let id = crate::community::domain::text(input, "id")?;
+        let id = crate::platform::domain::text(input, "id")?;
         let task = state
             .tasks
             .instances

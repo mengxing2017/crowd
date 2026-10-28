@@ -1,4 +1,4 @@
-use crate::community::domain::{Result, State};
+use crate::platform::domain::{Result, State};
 use crate::tasks::south::port::VerifiedTaskResult;
 use serde_json::Value;
 
@@ -11,7 +11,7 @@ impl VerifiedTaskResult for State {
         occurred_at: i64,
         base_cents: Option<i64>,
     ) -> Result<Value> {
-        use crate::community::domain::{Failure, invalid};
+        use crate::platform::domain::{Failure, invalid};
         if source.is_empty()
             || source.len() > 128
             || event.is_empty()

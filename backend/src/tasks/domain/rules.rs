@@ -1,7 +1,7 @@
 use super::validation::{
     active, array, conflict, missing, next_time, number, positive, require, version,
 };
-use crate::community::domain::{Failure, Result, State, invalid, text};
+use crate::platform::domain::{Failure, Result, State, invalid, text};
 use serde_json::{Value, json};
 
 /// All arithmetic is integral; proportional inputs come exclusively from a verified source.

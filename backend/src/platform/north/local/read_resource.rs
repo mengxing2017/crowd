@@ -1,0 +1,43 @@
+use crate::platform::domain::Result;
+use crate::platform::south::adapter::postgres::Repository;
+use serde_json::Value;
+
+#[derive(Clone)]
+pub struct ReadResource {
+    repo: Repository,
+}
+
+impl ReadResource {
+    pub fn new(repo: Repository) -> Self {
+        Self { repo }
+    }
+
+    pub async fn execute(
+        &self,
+        token: &str,
+        section: &str,
+        target: Option<&str>,
+        request: &str,
+    ) -> Result<Value> {
+        let mut tx = self.repo.begin().await?;
+        let actor = Repository::authenticate(&mut tx, token).await?;
+        let mut state = Repository::load(&mut tx).await?;
+        let now = Repository::time(&mut tx).await?;
+        let epoch = Repository::epoch(&mut tx).await?;
+        let result =
+            super::query_dispatch::read(&mut state, &actor, section, target, request, &now, epoch);
+        if let Err(ref failure) = result {
+            state.log_failure(
+                &actor,
+                section,
+                target.unwrap_or(&actor),
+                request,
+                &now,
+                failure.0,
+            );
+        }
+        Repository::save(&mut tx, &state).await?;
+        Repository::commit(tx).await?;
+        result
+    }
+}

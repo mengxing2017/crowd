@@ -1,4 +1,4 @@
-use crate::community::domain::State;
+use crate::platform::domain::State;
 use serde_json::json;
 
 impl State {

@@ -1,5 +1,5 @@
 use super::{parse, request_id, response, token};
-use crate::{Application, community::domain::Failure};
+use crate::{Application, shared::Failure};
 use axum::{Json, extract::rejection::JsonRejection, http::HeaderMap, response::Response};
 use serde::Deserialize;
 use serde_json::Value;

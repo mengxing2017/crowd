@@ -1,4 +1,13 @@
 mod application;
+pub mod audit;
+pub mod files;
+pub mod governance;
+pub mod identity;
+pub mod platform;
+pub mod promotion;
+pub mod receipts;
+pub mod shared;
+pub mod support;
 pub use application::ApplicationServices;
 pub mod catalog;
 pub mod community;
@@ -20,17 +29,17 @@ pub struct Application {
 }
 pub fn router(pool: PgPool) -> Router {
     Router::new()
-        .merge(community::north::remote::routes())
+        .merge(platform::north::remote::routes())
         .route("/healthz", get(remote::liveness))
         .route("/readyz", get(remote::readiness))
         .route("/api/v1/system", get(remote::system_info))
         .with_state(Application {
-            services: ApplicationServices::new(community::south::adapter::postgres::Repository {
+            services: ApplicationServices::new(platform::south::adapter::postgres::Repository {
                 pool: pool.clone(),
             }),
             system: SystemService::new(PostgresReadiness::new(pool.clone())),
             community: community::north::local::Service {
-                repo: community::south::adapter::postgres::Repository { pool },
+                repo: platform::south::adapter::postgres::Repository { pool },
             },
         })
 }

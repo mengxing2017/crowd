@@ -1,6 +1,6 @@
 use super::rules::calculate;
 use super::validation::{array, conflict, missing, next_time, number, positive, require, version};
-use crate::community::domain::{Result, State, invalid, text};
+use crate::platform::domain::{Result, State, invalid, text};
 use serde_json::{Value, json};
 
 impl State {
