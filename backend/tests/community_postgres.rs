@@ -185,6 +185,108 @@ async fn postgres_registration_sessions_files_and_concurrent_commands() {
         let value: Value =
             serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap()).unwrap();
         assert_eq!(value["data"]["id"], uid);
+        // Fixed entity handlers must preserve the original service operation,
+        // authenticated owner, target scope and authorization result.
+        for section in [
+            "me",
+            "codes",
+            "receipts",
+            "my_claims",
+            "my_attribution",
+            "catalog_notifications",
+            "my_tasks",
+            "catalog_admin",
+            "attribution_admin",
+            "task_queue",
+            "task_rules",
+            "audit",
+        ] {
+            let expected = service.read(alice, section, None, "remote-parity").await;
+            let response = http
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/api/v1/community/read/{section}"))
+                        .header("authorization", format!("Bearer {alice}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let status = response.status();
+            let mut actual: Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap())
+                    .unwrap();
+            match expected {
+                Ok(mut expected) => {
+                    assert_eq!(status, StatusCode::OK, "{section}");
+                    if let Some(object) = expected.as_object_mut() {
+                        object.remove("server_time");
+                    }
+                    if let Some(object) = actual["data"].as_object_mut() {
+                        object.remove("server_time");
+                    }
+                    assert_eq!(actual["data"], expected, "{section}");
+                }
+                Err(error) => {
+                    assert!(!status.is_success(), "{section}");
+                    assert_eq!(actual["error"]["code"], error.0, "{section}");
+                }
+            }
+        }
+        for _ in 0..2 {
+            let response = http
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/community/commands/profile")
+                        .header("authorization", format!("Bearer {alice}"))
+                        .header("content-type", "application/json")
+                        .header("idempotency-key", "same-key")
+                        .body(Body::from(
+                            json!({"nickname":"Concurrent","version":1}).to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let value: Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 16384).await.unwrap())
+                    .unwrap();
+            assert_eq!(value["data"]["version"], 2);
+        }
+        assert_eq!(
+            service
+                .read(alice, "me", None, "replay-version")
+                .await
+                .unwrap()["version"],
+            version
+        );
+        for action in [
+            "product_save",
+            "category_save",
+            "policy_publish",
+            "price_save",
+            "review_claim",
+        ] {
+            let response = http
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(format!("/api/v1/community/commands/{action}"))
+                        .header("authorization", format!("Bearer {alice}"))
+                        .header("content-type", "application/json")
+                        .header("idempotency-key", format!("remote-forbidden-{action}"))
+                        .body(Body::from("{}"))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN, "{action}");
+        }
         let response = http
             .clone()
             .oneshot(
