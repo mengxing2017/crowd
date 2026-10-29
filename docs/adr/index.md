@@ -19,3 +19,5 @@
 
 - [ADR 0014：领域公开入口与实际事件处理](/adr/0014-domain-public-entrypoints)
 - [ADR 0015：运营领域与用户告知事务边界](/adr/0015-operations-domain-workflows)
+
+- [ADR 0016：安全、报表及隐私治理](./0016-governance-reporting-privacy.md)

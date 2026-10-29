@@ -79,7 +79,8 @@ export default defineConfig({
             "link": "/requirements/m13-m16"
           },
           {"text": "M17–M19 收款资料与人工登记追踪", "link": "/requirements/m17-m19"},
-          {"text": "M20–M24 数字调整与用户服务", "link": "/requirements/m20-m24"}
+          {"text": "M20–M24 数字调整与用户服务", "link": "/requirements/m20-m24"},
+          {"text": "M25–M29 权限、统计与隐私治理", "link": "/requirements/m25-m29"}
         ]
       },
       {
@@ -176,6 +177,7 @@ export default defineConfig({
           },
           {"text": "M17–M19 收款资料与人工异常运行手册", "link": "/runbooks/m17-m19"},
           {"text": "M20–M24 数字调整与客服风险操作", "link": "/runbooks/m20-m24"},
+          {"text": "M25–M29 运行与验证", "link": "/runbooks/m25-m29"},
           {
             "text": "Web 管理端重构与验证",
             "link": "/runbooks/web-console"
