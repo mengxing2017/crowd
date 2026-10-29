@@ -1,0 +1,8 @@
+.card { background: #fff; padding: 24rpx; margin: 24rpx 0; border-radius: 16rpx; }
+text { display: block; margin: 14rpx 0; overflow-wrap: break-word; word-break: break-all; }
+.heading, .title { font-size: 34rpx; font-weight: bold; }
+.record { border-top: 1px solid #dfebe4; padding: 16rpx 0; }
+input, textarea { box-sizing: border-box; border: 1px solid #b3c4bd; padding: 18rpx; margin: 20rpx 0; width: 100%; }
+textarea { height: 220rpx; }
+button { margin: 16rpx 0; }
+image { width: 100%; }

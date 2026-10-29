@@ -11,7 +11,7 @@ import { catalog as catalogApi } from '../../features/catalog/api'
 import { attribution } from '../../features/attribution/api'
 import WithdrawalCenter from '../../features/withdrawals/WithdrawalCenter.vue'
 import TaskCenter from '../../features/tasks/TaskCenter.vue'
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { onLoad, onShow, onHide } from '@dcloudio/uni-app'
 import { BusinessError, executeCommand, platform } from '../../features/platform/api'
 import type { User } from '../../features/identity/api'
@@ -21,8 +21,12 @@ import type { Receipt } from '../../features/receipts/api'
 import type { PublicCatalog, PublicProduct, CatalogNotification } from '../../features/catalog/api'
 import type { Claim } from '../../features/tasks/api'
 import { support } from '../../features/support/api'
-import { download, fileUrl, upload } from '../../features/files/api'
-import { setToken } from '../../features/session/api'
+import { fileUrl, upload } from '../../features/files/api'
+import { setToken, origin, onSessionExpired, sessionVersion, assertSession } from '../../features/session/api'
+import { usePrivateFiles } from '../../features/files/private-files'
+import { chooseImagePath } from '../../features/files/api'
+import { promotionSource } from '../../features/promotion/entry'
+import { rememberCommand, forgetCommand, restoreCommand, publishRecovered, type PendingCommand } from '../../features/platform/recovery'
 const catalogState = ref<'initial' | 'loading' | 'ready' | 'error'>('initial')
 const catalogError = ref('')
 const compatibility = ref('')
@@ -67,11 +71,11 @@ const application = ref('')
 const cases = ref<{ id: string; kind: string; status: string }[]>([])
 const busy = ref(false)
 const message = ref('')
-const pending = ref<{ action: string; body: Record<string, unknown>; key: string; owner: string } | null>(null)
+const pending = ref<PendingCommand | null>(null)
 const ticket = ref('')
 let counter = 0
 function key() { return `${Date.now()}-${++counter}-${Math.random().toString(36).slice(2)}` }
-onLoad(query => { if (typeof query?.source === 'string') { source.value = query.source; void visit(query.source) } })
+onLoad(query => { try { const code = promotionSource(query || {}, import.meta.env.VITE_PROMOTION_ORIGIN || ''); if (code) { source.value = code; void visit(code) } } catch (error) { fallback.value = `${error instanceof Error ? error.message : '推广入口无效'}；可继续浏览产品` } })
 async function visit(code: string) {
   try {
     const touch = await attribution.touch({ code, scene: 'miniapp_share' }, key())
@@ -79,12 +83,15 @@ async function visit(code: string) {
     if (me.value) await submit('touch_bind', { touch_token: touch.touch_token })
   } catch (e) { fallback.value = `${e instanceof Error ? e.message : '推广码不可用'}；可返回产品列表继续浏览。` }
 }
+let catalogRequest = 0
 async function loadCatalog() {
+  const request = ++catalogRequest
   catalogState.value = 'loading'; catalogError.value = ''; try {
   const next = await catalogApi.catalog({ keyword: keyword.value, category: categoryFilter.value || undefined, min_cents: minimum.value ? Number(minimum.value) : undefined, max_cents: maximum.value ? Number(maximum.value) : undefined, sort: sort.value })
+  if (request !== catalogRequest) return
   catalog.value = next; catalogState.value = 'ready'
   if (selected.value) selected.value = next.products.find(p => p.id === selected.value?.id) || null
- } catch (e) { catalogState.value = 'error'; catalogError.value = e instanceof Error ? e.message : '目录加载失败'; throw e }
+ } catch (e) { if (request !== catalogRequest) return; catalogState.value = 'error'; catalogError.value = e instanceof Error ? e.message : '目录加载失败'; throw e }
 }
 function openProduct(product: PublicProduct) { selected.value = product; selectedTask.value = product.content.tasks[0]?.id || ''; claimConfirmed.value = false }
 async function claimTask() {
@@ -93,36 +100,83 @@ async function claimTask() {
   claimConfirmed.value = false; await loadCatalog()
 }
 function cents(value: number) { return `${Math.trunc(value / 100)}.${String(value % 100).padStart(2, '0')}` }
-const imageOrigin = import.meta.env.VITE_API_ORIGIN || 'http://127.0.0.1:8080'
+const imageOrigin = origin
+const privateFiles = usePrivateFiles(() => { privateImage.value = ''; fullAccount.value = ''; ticket.value = ''; qr.value = '' })
+const stopSession = onSessionExpired(clearPrivate)
+onUnmounted(stopSession)
+let initialized = false
+const refreshWarning = ref('')
 
-onHide(hidePrivate)
-onShow(() => { if (!busy.value) void run(async () => { await loadCatalog(); if (me.value) await refresh() }) })
-onMounted(() => { void run(async () => { await loadCatalog(); agreement.value = await governance.agreements(); try { const info = (await system()).data.attributes; compatibility.value = info.capabilities?.includes('manual_settlement') ? (info.read_compatibility || '') : '当前服务能力有限；可继续查询历史记录，新操作请更新客户端或联系客服。' } catch { compatibility.value = '暂无法检查版本能力；历史查询仍可重试。' } }) })
+onHide(() => { ticket.value = '' })
+onShow(() => { if (initialized && !busy.value) void run(async () => { await loadCatalog(); if (me.value) await refresh() }) })
+onMounted(() => { initialized = true; void run(async () => { await loadCatalog(); agreement.value = await governance.agreements(); try { const info = (await system()).data.attributes; compatibility.value = info.capabilities?.includes('manual_settlement') ? (info.read_compatibility || '') : '当前服务能力有限；可继续查询历史记录，新操作请更新客户端或联系客服。' } catch { compatibility.value = '暂无法检查版本能力；历史查询仍可重试。' } }) })
 let runningCount = 0
-async function run(work: () => Promise<void>) { runningCount += 1; busy.value = true; message.value = '处理中…'; try { await work(); message.value = '操作完成' } catch (e) { if (e instanceof BusinessError && e.detail.code === 'SESSION_EXPIRED') clearPrivate(); message.value = e instanceof Error ? e.message : '操作失败，请查询原结果' } finally { runningCount -= 1; busy.value = runningCount > 0 } }
+async function run(work: () => Promise<void>) { refreshWarning.value = ''; runningCount += 1; busy.value = true; message.value = '处理中…'; try { await work(); message.value = refreshWarning.value || '操作完成' } catch (e) { if (e instanceof BusinessError && e.detail.code === 'SESSION_EXPIRED') clearPrivate(); message.value = e instanceof Error ? e.message : '操作失败，请查询原结果' } finally { runningCount -= 1; busy.value = runningCount > 0 } }
+let refreshing: Promise<void> | undefined
+let refreshingVersion = -1
 async function refresh() {
-  const user = await identity.me(); me.value = user; nickname.value = user.nickname
-  attributionDisputes.value = (await attribution.mine()).disputes
-  claims.value = await tasks.claims(); notifications.value = await catalogApi.notifications()
-  taskRevision.value += 1
-  codes.value = await promotion.codes(); cases.value = await support.cases()
+  const version = sessionVersion()
+  if (refreshing && refreshingVersion === version) return refreshing
+  const work = async () => {
+    const user = await identity.me()
+    const [attributionResult, nextClaims, nextNotifications, nextCodes, nextCases] = await Promise.all([
+      attribution.mine(), tasks.claims(), catalogApi.notifications(), promotion.codes(), support.cases(),
+    ])
+    assertSession(version)
+    me.value = user; nickname.value = user.nickname; attributionDisputes.value = attributionResult.disputes
+    claims.value = nextClaims; notifications.value = nextNotifications; codes.value = nextCodes; cases.value = nextCases
+    taskRevision.value += 1
+  }
+  const current = work()
+  refreshing = current; refreshingVersion = version
+  try { await current } finally { if (refreshing === current) refreshing = undefined }
+}
+async function refreshAfterCommand() {
+  refreshWarning.value = ''
+  try { await refresh(); refreshWarning.value = '' } catch { refreshWarning.value = '提交已成功，但资料刷新失败；请刷新查询，不要重复提交'; message.value = refreshWarning.value }
 }
 async function submit(action: string, body: Record<string, unknown>) {
   if (pending.value) throw new Error('请先查询上次提交结果，或使用原请求重试')
-  pending.value = { action, body, key: key(), owner: me.value?.id || '' }
-  try { const value = await executeCommand(action, body, pending.value.key); pending.value = null; await refresh(); return value } catch (e) { if (e instanceof BusinessError && e.detail.code !== 'SERVICE_UNAVAILABLE') pending.value = null; throw e }
+  const input = JSON.parse(JSON.stringify(body)) as Record<string, unknown>
+  const item: PendingCommand = { action, body: input, key: key(), owner: me.value?.id || '' }
+  rememberCommand(item); pending.value = item
+  let value: Record<string, unknown>
+  try { value = await executeCommand(action, input, item.key) }
+  catch (error) {
+    if (error instanceof BusinessError && error.detail.code !== 'SERVICE_UNAVAILABLE') { forgetCommand(item); if (pending.value?.key === item.key) pending.value = null }
+    throw error
+  }
+  forgetCommand(item); if (pending.value?.key === item.key) pending.value = null
+  await refreshAfterCommand()
+  return value
+}
+async function recoverCommand(retry = false) {
+  const stamp = privateFiles.capture()
+  const item = pending.value
+  if (!item || item.owner !== me.value?.id) throw new Error('请登录原账号查询提交结果')
+  const value = retry && item.body ? await executeCommand(item.action, item.body, item.key) : await platform.commandResult(item.key)
+  if (!privateFiles.current(stamp)) throw new Error('页面已隐藏，请返回后重新查询原结果')
+  forgetCommand(item); pending.value = null
+  publishRecovered({ action: item.action, result: value })
+  if (item.action === 'receipt_reveal') {
+    if (typeof value.account === 'string' && privateFiles.current(stamp)) fullAccount.value = value.account
+    if (typeof value.file_id === 'string') { const path = await privateFiles.download(fileUrl(value.file_id), stamp); if (path) privateImage.value = path }
+  }
+  if (item.action === 'web_ticket') { ticket.value = String(value.ticket || ''); message.value = '已找回原票据；如已过期请重新生成' }
+  await refreshAfterCommand()
 }
 async function login() {
   if (source.value && touchTokens.value.length === 0) await visit(source.value)
   const credential = await uni.login({ provider: 'weixin' })
   const session = await identity.login({ code: credential.code, agreed: agreed.value, agreement_id: agreement.value?.id, source: source.value || undefined, touch_token: touchTokens.value[0] })
-  if (pending.value && pending.value.owner !== session.user_id) pending.value = null; setToken(session.token); for (const token of touchTokens.value) await executeCommand('touch_bind', { touch_token: token }, key()); await refresh()
+  pending.value = pending.value?.owner === session.user_id ? pending.value : restoreCommand(session.user_id); setToken(session.token); for (const token of touchTokens.value) await executeCommand('touch_bind', { touch_token: token }, key()); await refresh()
 }
 async function choose(purpose: 'avatar' | 'wechat_receipt') {
-  const choice = await uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'] })
-  const result = await upload(choice.tempFilePaths[0], purpose)
+  const path = await chooseImagePath()
+  const stamp = privateFiles.capture()
+  const result = await upload(path, purpose)
   if (purpose === 'avatar') await submit('profile', { nickname: nickname.value, avatar: result.id, version: me.value?.version })
-  else { file.value = result.id; privateImage.value = await download(fileUrl(result.id)) }
+  else if (privateFiles.current(stamp)) { file.value = result.id; const previewPath = await privateFiles.download(fileUrl(result.id), stamp); if (previewPath) privateImage.value = previewPath }
 }
 async function receipt() {
   formErrors.value = {}
@@ -134,11 +188,13 @@ async function receipt() {
   account.value = ''; name.value = ''; file.value = ''; confirmed.value = false; privateImage.value = ''
 }
 async function reveal(record: Receipt) {
+  const stamp = privateFiles.capture()
   const value = await submit('receipt_reveal', { id: record.id, reason: '本人核对收款资料' })
+  if (!privateFiles.current(stamp)) return
   if (typeof value.account === 'string') fullAccount.value = value.account
-  if (typeof value.file_id === 'string') privateImage.value = await download(fileUrl(value.file_id))
+  if (typeof value.file_id === 'string') { const path = await privateFiles.download(fileUrl(value.file_id), stamp); if (path) privateImage.value = path }
 }
-async function showQr(id: string) { qr.value = await download(qrUrl(id)) }
+async function showQr(id: string) { const stamp = privateFiles.capture(); const path = await privateFiles.download(qrUrl(id), stamp); if (path) qr.value = path }
 async function saveQr() { if (!qr.value) return; try { await uni.saveImageToPhotosAlbum({ filePath: qr.value }) } catch { throw new Error('相册保存未授权或失败；仍可查看二维码并复制推广码，无需授权即可继续其他业务') } }
 async function logout() {
   // Clear local data even if network fails; the server session expires independently.
@@ -146,25 +202,26 @@ async function logout() {
     clearPrivate(); pending.value = null
   }
 }
-function clearPrivate() { attributionDisputes.value = []; claims.value = []; notifications.value = []; touchTokens.value = []; hidePrivate(); setToken(''); me.value = null; nickname.value = ''; account.value = ''; name.value = ''; codes.value = []; cases.value = []; qr.value = ''; privateImage.value = ''; fullAccount.value = ''; ticket.value = ''; file.value = ''; confirmed.value = false; reason.value = ''; application.value = '' }
+function clearPrivate() { privateFiles.clear(); pending.value = null; attributionDisputes.value = []; claims.value = []; notifications.value = []; touchTokens.value = []; setToken(''); me.value = null; nickname.value = ''; account.value = ''; name.value = ''; codes.value = []; cases.value = []; qr.value = ''; privateImage.value = ''; fullAccount.value = ''; ticket.value = ''; file.value = ''; confirmed.value = false; reason.value = ''; application.value = '' }
 // Authentication is held only in memory. No private response is persisted in platform storage.
-function hidePrivate() { if (privateImage.value) uni.getFileSystemManager().unlink({ filePath: privateImage.value, fail: () => undefined }); privateImage.value = ''; fullAccount.value = '' }
+function hidePrivate() { privateFiles.clear() }
 function previewReceiptImage() { if (privateImage.value) uni.previewImage({ urls: [privateImage.value] }) }
+async function generateTicket() { const stamp = privateFiles.capture(); const result = await submit('web_ticket', {}); if (privateFiles.current(stamp)) { ticket.value = String(result.ticket); await copy(ticket.value) } }
 function copy(value: string) { return uni.setClipboardData({ data: value }) }
 </script>
 <template>
   <view class="page">
     <text class="title">Crowd 首页</text>
-    <view class="navigation" role="navigation" aria-label="主要业务导航"><button @click="goTo('products')">产品</button><button @click="goTo(me ? 'tasks' : 'login')">我的任务</button><button @click="goTo(me ? 'promotion' : 'login')">推广码</button><button @click="goTo(me ? 'profile' : 'login')">个人中心／佣金与提现</button></view>
+    <view class="navigation" aria-label="主要业务导航"><button @click="goTo('products')">产品</button><button @click="goTo(me ? 'tasks' : 'login')">我的任务</button><button @click="goTo(me ? 'promotion' : 'login')">推广码</button><button @click="goTo(me ? 'profile' : 'login')">个人中心／佣金与提现</button></view>
     <text v-if="compatibility">{{ compatibility }}</text>
     <text class="notice">佣金是业务标记数字，不是系统实存资金。实际付款由平台人员在线下手动完成。</text>
-    <text class="status" role="status" aria-live="polite">{{ message }}</text>
+    <text class="status">{{ message }}</text>
     <view v-if="fallback" class="card"><text>{{ fallback }}</text><button @click="selected = null; fallback = ''">返回产品列表</button></view>
     <view class="card">
       <view id="nav-products" /><text class="heading">产品目录</text><input v-model="keyword" aria-label="搜索产品名称" placeholder="搜索产品名称" /><input v-model="minimum" type="number" aria-label="最低佣金（整数分，可选）" placeholder="最低佣金（整数分，可选）" /><input v-model="maximum" type="number" aria-label="最高佣金（整数分，可选）" placeholder="最高佣金（整数分，可选）" />
       <picker :range="['名称排序', '佣金从低到高', '佣金从高到低']" @change="sort = (['name', 'commission_asc', 'commission_desc'] as const)[Number($event.detail.value)]"><view>排序：{{ sort === 'name' ? '名称' : sort === 'commission_asc' ? '佣金升序' : '佣金降序' }}</view></picker>
       <view v-if="catalog"><button @click="categoryFilter = ''; run(loadCatalog)">全部分类</button><button v-for="c in catalog.categories" :key="c.id" @click="categoryFilter = c.id; run(loadCatalog)">{{ c.name }}</button></view>
-      <button :disabled="busy" @click="run(loadCatalog)">搜索／刷新产品</button><text v-if="catalogState === 'loading'">{{ catalog ? '正在刷新，保留上次目录…' : '正在首次加载目录…' }}</text><text v-if="catalogState === 'error'" role="alert">{{ catalogError }}；请点击刷新重试。</text><text v-if="catalogState === 'ready' && catalog?.products.length === 0">暂无符合条件的已发布产品。</text>
+      <button :disabled="busy" @click="run(loadCatalog)">搜索／刷新产品</button><text v-if="catalogState === 'loading'">{{ catalog ? '正在刷新，保留上次目录…' : '正在首次加载目录…' }}</text><text v-if="catalogState === 'error'">{{ catalogError }}；请点击刷新重试。</text><text v-if="catalogState === 'ready' && catalog?.products.length === 0">暂无符合条件的已发布产品。</text>
       <view v-for="p in catalog?.products || []" :key="p.id" class="record"><text class="heading">{{ p.content.name }}</text><text>{{ p.content.summary }}</text><text v-for="t in p.content.tasks" :key="t.id">{{ t.name }} · {{ t.price_preview?.kind === 'proportional' && t.price_preview.cap_cents == null ? '按可信成果比例待核定' : `${t.price_preview?.kind === 'proportional' ? '佣金上限' : '佣金标记'} ${cents(t.commission_cents)} 元` }}</text><button @click="openProduct(p)">查看条件与任务</button></view>
     </view>
     <view v-if="selected" class="card"><text class="heading">{{ selected.content.name }}</text><image v-for="img in selected.content.images" :key="img.file_id" :src="`${imageOrigin}/api/v1/catalog/images/${encodeURIComponent(img.file_id)}`" mode="widthFix" @error="message = '图片暂不可用，请阅读文字说明'" /><text v-for="img in selected.content.images" :key="`alt-${img.file_id}`">{{ img.alt }}</text><text>{{ selected.content.details }}</text><text class="notice">关键限制：{{ selected.content.limitations }}</text><text>预计 {{ selected.content.estimated_minutes }} 分钟；适用地区：{{ selected.content.regions.join('、') || '不限' }}；资格：{{ selected.content.qualifications.join('、') || '不限' }}</text>
@@ -182,7 +239,7 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
     </view>
     <template v-else>
       <NotificationCenter :key="`notifications-${me.id}`" :revision="taskRevision" :busy="busy" :blocked="!!pending" :submit="submit" :run="run" />
-      <SupportCenter :key="`support-${me.id}`" :revision="taskRevision" :busy="busy" :blocked="!!pending" :submit="submit" :run="run" />
+      <SupportCenter :owner="me.id" :key="`support-${me.id}`" :revision="taskRevision" :busy="busy" :blocked="!!pending" :submit="submit" :run="run" />
       <RiskCenter :key="`risk-${me.id}`" :revision="taskRevision" :run="run" />
       <view id="nav-profile" /><text class="heading">个人中心／佣金与提现</text>
       <PrivacyCenter :key="`privacy-${me.id}`" :revision="taskRevision" :busy="busy" :blocked="!!pending" :submit="submit" :run="run" />
@@ -214,7 +271,7 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
         <view v-for="record in me.receipts" :key="record.id" class="record"><text>{{ record.method || '停用记录' }} · {{ record.status }} · V{{ record.version }} {{ record.account }} {{ record.is_default ? '默认新申请资料' : '' }}</text>
           <template v-if="record.method"><button :disabled="busy || !!pending" @click="run(() => reveal(record))">本人查看完整资料（留痕）</button><button :disabled="busy || !!pending" @click="run(async () => { await submit('receipt_disable', { id: record.id, version: me?.version }) })">停用并保留历史</button><button v-if="record.method === 'wechat' && me.receipts.some(r => r.disables === record.id) && !me.receipts.some(r => r.cleans === record.id)" :disabled="busy || !!pending" @click="run(async () => { await submit('receipt_cleanup', { id: record.id, version: me?.version, reason: '本人请求按已发布保留政策清理停用且无引用的码图' }) })">按保留政策清理无引用旧图</button></template>
         </view>
-        <text v-if="formErrors.file" role="alert">{{ formErrors.file }}</text><text v-if="formErrors.account" role="alert">{{ formErrors.account }}</text><text v-if="formErrors.confirmed" role="alert">{{ formErrors.confirmed }}</text><text v-if="privateImage">请检查码图清晰、完整且无遮挡；点击图片放大核对，不代表官方收款认证。</text><image v-if="privateImage" @click="previewReceiptImage" :src="privateImage" mode="widthFix" /><text v-if="fullAccount">{{ fullAccount }}</text><button v-if="privateImage || fullAccount" @click="hidePrivate">关闭敏感资料</button>
+        <text v-if="formErrors.file">{{ formErrors.file }}</text><text v-if="formErrors.account">{{ formErrors.account }}</text><text v-if="formErrors.confirmed">{{ formErrors.confirmed }}</text><text v-if="privateImage">请检查码图清晰、完整且无遮挡；点击图片放大核对，不代表官方收款认证。</text><image v-if="privateImage" @click="previewReceiptImage" :src="privateImage" mode="widthFix" /><text v-if="fullAccount">{{ fullAccount }}</text><button v-if="privateImage || fullAccount" @click="hidePrivate">关闭敏感资料</button>
       </view>
       <view class="card">
         <view id="nav-promotion" /><text class="heading">个人独立推广码</text><text>推广码与收款码不同；扫码不代表完成任务，也不产生可申请佣金。</text>
@@ -229,8 +286,8 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
         <button :disabled="busy || !!pending || !reason" @click="run(async () => { await submit('closure', { reason }) })">申请注销并核查未结事项</button>
         <text>申请不自动合并身份、删除资料、释放占用或更改付款账户。注销需完成关联业务核查。</text><text v-if="cases.length === 0">暂无申请。</text><text v-for="(item, index) in cases" :key="index" class="document">{{ item.kind === 'closure' ? '注销申请' : item.kind === 'merge' ? '身份核验申请' : '资料纠错申请' }} · {{ item.status === 'pending_dependency_check' ? '待关联业务核查' : '待人工核实' }} · {{ item.id }}</text>
       </view>
-      <view class="card"><text class="heading">后台登录</text><button :disabled="busy || !!pending" @click="run(async () => { const result = await submit('web_ticket', {}); ticket = String(result.ticket); await copy(ticket) })">生成并复制一次性后台票据</button><text v-if="ticket">60 秒内在管理端使用，使用后立即失效。请勿转交他人。</text></view>
-      <view v-if="pending" class="card"><text>上次提交结果未确认，请先查询原结果。重试使用原请求键及原内容。</text><button :disabled="busy" @click="run(async () => { await platform.commandResult(pending!.key); pending = null; await refresh() })">查询原结果</button><button :disabled="busy" @click="run(async () => { if (pending) { await executeCommand(pending.action, pending.body, pending.key); pending = null; await refresh() } })">重试原提交</button></view>
+      <view class="card"><text class="heading">后台登录</text><button :disabled="busy || !!pending" @click="run(generateTicket)">生成并复制一次性后台票据</button><text v-if="ticket">60 秒内在管理端使用，使用后立即失效。请勿转交他人。</text></view>
+      <view v-if="pending" class="card"><text>上次提交结果未确认，请先查询原结果。重试使用原请求键及原内容。</text><button :disabled="busy" @click="run(() => recoverCommand())">查询原结果</button><button v-if="pending.body" :disabled="busy" @click="run(() => recoverCommand(true))">重试原提交</button><text v-else>重启后仅保留查询引用；未找到结果时请先核对业务记录或联系客服，不直接重复提交。</text></view>
     </template>
   </view>
 </template>
