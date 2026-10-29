@@ -1,3 +1,5 @@
+mod database_config;
+
 use sqlx::postgres::PgPoolOptions;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -7,10 +9,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
     let address = crowd_api::runtime::bind_address()?;
-    let url = std::env::var("CROWD_DATABASE_URL")?;
+    let options = database_config::from_env()?;
     let pool = PgPoolOptions::new()
         .max_connections(10)
-        .connect(&url)
+        .connect_with(options)
         .await?;
     let result = crowd_api::runtime::serve(pool.clone(), address).await;
     pool.close().await;
