@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import NotificationCenter from '../../features/notifications/NotificationCenter.vue'
+import SupportCenter from '../../features/support/SupportCenter.vue'
+import RiskCenter from '../../features/risk/RiskCenter.vue'
 import { tasks } from '../../features/tasks/api'
 import { identity } from '../../features/identity/api'
 import { governance } from '../../features/governance/api'
@@ -162,6 +165,9 @@ function copy(value: string) { return uni.setClipboardData({ data: value }) }
       <button :disabled="busy" @click="run(async () => { agreement = await governance.agreements() })">重新加载协议</button>
     </view>
     <template v-else>
+      <NotificationCenter :key="`notifications-${me.id}`" :revision="taskRevision" :busy="busy" :blocked="!!pending" :submit="submit" :run="run" />
+      <SupportCenter :key="`support-${me.id}`" :revision="taskRevision" :busy="busy" :blocked="!!pending" :submit="submit" :run="run" />
+      <RiskCenter :key="`risk-${me.id}`" :revision="taskRevision" :run="run" />
       <WithdrawalCenter :key="`withdrawal-${me.id}`" :me="me" :revision="taskRevision" :busy="busy" :blocked="!!pending" :submit="submit" />
       <TaskCenter :key="me.id" :busy="busy" :pending="!!pending" :revision="taskRevision" :submit="submit" :run="run" />
       <view class="card"><text class="heading">已领取任务与历史快照</text><text v-if="claims.length === 0">暂无领取记录；扫码不会占用名额。</text><view v-for="c in claims" :key="c.id" class="record"><text>{{ c.product.name }} · {{ c.task.name }} · {{ c.task.price_preview?.kind === 'proportional' && c.task.price_preview.cap_cents == null ? '按比例待核定' : `${cents(c.task.commission_cents)} 元（${c.task.price_preview?.kind === 'proportional' ? '单笔上限' : '标记数字'}）` }}</text><text>实例：{{ c.id }}；条件：{{ c.task.completion }}；限制：{{ c.product.limitations }}；原分类：{{ c.category.name }}</text><text>提交期限：{{ new Date(c.submit_until * 1000).toLocaleString() }}；已固定领取时规则与推广归属</text><button @click="disputeClaim = c.id">申诉此任务归因</button></view><text>新版任务可在下方“我的任务执行与提交”处理；旧版领取快照不变。</text><input v-model="disputeClaim" placeholder="申诉任务实例编号" /><input v-model="disputeReason" placeholder="申诉理由" /><input v-model="disputeEvidence" placeholder="触点证据说明" /><button :disabled="busy || !!pending || !disputeClaim || !disputeReason || !disputeEvidence" @click="run(async () => { await submit('attribution_dispute', { claim_id: disputeClaim, reason: disputeReason, evidence: disputeEvidence }) })">提交归因申诉（不直接改数字）</button><view v-for="d in attributionDisputes" :key="d.id"><text>申诉 {{ d.claim_id }}：{{ d.status === 'pending' ? '待人工裁定' : d.status === 'uphold' ? '维持原归属' : '待关联数字调整核查' }} {{ d.decision_reason }}</text></view></view>
