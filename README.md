@@ -170,3 +170,6 @@ Web 首页提供管理员账号密码登录，也可切换小程序一次性票�
 操作与参数见 [岗位手册](docs/runbooks/m20-m24.md)，逐条范围、依赖和未验证项见 [需求追踪](docs/requirements/m20-m24.md)。实际付款仍由人员在系统外完成，不增加支付接口、真实资金池或自动追偿。
 
 M25–M29 权限、统计核对、可信任务事件、隐私治理与小程序体验：见 [实现追踪](docs/requirements/m25-m29.md) 与 [运行验证](docs/runbooks/m25-m29.md)。
+
+- [状态、实体、能力与四方案交付追踪](docs/requirements/m31-m35.md)
+- [32项端到端映射与统一交付验证](docs/runbooks/m31-m35.md)
