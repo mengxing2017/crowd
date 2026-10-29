@@ -7,7 +7,9 @@
     "dev": "uni -p mp-weixin",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint src --max-warnings=0",
-    "build": "uni build -p mp-weixin"
+    "build": "uni build -p mp-weixin",
+    "test": "node tests/compatibility.test.mjs",
+    "build:release": "node scripts/build-release.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5030320261023001",
