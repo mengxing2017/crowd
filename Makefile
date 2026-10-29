@@ -28,6 +28,21 @@ web-dev:
 	pnpm --dir frontend dev
 miniapp-dev:
 	pnpm --dir frontend --filter @crowd/miniapp dev
+DOCKER ?= docker
+API_IMAGE ?= crowd-api:local
+WEB_IMAGE ?= crowd-web:local
+COMPOSE = $(DOCKER) compose --env-file .env -f compose.yaml -f compose.dev.yaml
+
+.PHONY: docker-build docker-build-api docker-build-web compose-config compose-build
+docker-build: docker-build-api docker-build-web
+docker-build-api:
+	$(DOCKER) build --pull -f backend/Dockerfile -t "$(API_IMAGE)" .
+docker-build-web:
+	$(DOCKER) build --pull -f frontend/Dockerfile -t "$(WEB_IMAGE)" .
+compose-config:
+	$(COMPOSE) config --quiet
+compose-build:
+	$(COMPOSE) build --pull
 compose-up:
 	docker compose --env-file .env -f compose.yaml -f compose.dev.yaml up --build --wait
 compose-down:
