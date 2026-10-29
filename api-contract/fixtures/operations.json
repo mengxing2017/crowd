@@ -1,0 +1,28 @@
+{
+  "campaigns": [
+    {
+      "id": "activity",
+      "version": 1,
+      "enabled": false,
+      "status": "active"
+    }
+  ],
+  "messages": [
+    {
+      "id": "message:alice:task:task:1:builtin:1",
+      "version": 1,
+      "business_id": "task",
+      "status": "submitted",
+      "current_status": "submitted"
+    }
+  ],
+  "tickets": [
+    {
+      "id": "ticket",
+      "version": 1,
+      "owner": "alice",
+      "category": "registration",
+      "status": "open"
+    }
+  ]
+}

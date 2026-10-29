@@ -14,7 +14,10 @@
 | `@crowd/api-contract/tasks` | 佣金规则、模板、参与资格、领取、执行、证据及审核 | `createTasks` |
 | `@crowd/api-contract/governance` | 平台规则版本、服务协议和隐私说明 | `createGovernance` |
 | `@crowd/api-contract/audit` | 审计记录及对象范围查询 | `createAudit` |
-| `@crowd/api-contract/support` | 纠错、注销、合并的待核查申请 | `createSupport` |
+| `@crowd/api-contract/support` | 资料核查申请、客服工单、申诉及服务统计 | `createSupport` |
+| `@crowd/api-contract/campaigns` | 活动计划、可选额度及统计 | `createCampaigns` |
+| `@crowd/api-contract/notifications` | 消息、模板、授权与岗位待办 | `createNotifications` |
+| `@crowd/api-contract/risk` | 风险规则、核查与具体限制 | `createRisk` |
 | `@crowd/api-contract/files` | 上传／私有文件路径及上传响应校验 | 路径函数与 `decodeUpload` |
 | `@crowd/api-contract/platform` | 原提交结果查询 | `createPlatform` |
 | `@crowd/api-contract/common` | 传输类型、响应信封和业务错误 | — |
@@ -77,3 +80,25 @@ make check-web
 `settlements.settlementException` 接收申请编号／版本、异常类型、核查责任人及说明。异常类型为 `receipt_error`、`unpaid`、`unknown`、`registration_error`，保留数字占用；责任人不会自动替换独占经办。异常后登记需 `offline_result_confirmed`，可选 `reference_note` 仅记必要线下流水备注。资料错误不能继续登记，已登记错误走关联更正。
 
 配置、兼容边界和未验证项见 [M17–M19 运行手册](../docs/runbooks/m17-m19.md)。不引入支付、自动查单或官方账户验证。
+
+## M20–M24 新增接口
+
+所有方法通过已有 `Transport`、统一响应信封、身份校验和原请求键工作。固定查询路径为 `/api/v1/community/read/{section}`，固定命令路径为 `/api/v1/community/commands/{action}`。兼容 URL 名称不改变领域归属。
+
+| 所属包 | 查询方法／section | 命令方法／action |
+| --- | --- | --- |
+| commissions | `adjustments(target?)`／`adjustments` | `adjustmentPropose`、`adjustmentLocate`、`adjustmentReview`、`adjustmentBatchPreview`、`adjustmentBatchReview`；对应同名 snake_case action |
+| campaigns | `campaigns()`、`campaignReport(id)` | `campaignSave`、`campaignTransfer`、`campaignArchive` |
+| notifications | `messages()`、`notificationTemplates()`、`notificationTodos()` | `notificationRead`、`notificationConsent`、`notificationTemplate` |
+| support | `tickets()`、`supportPolicy()`、`supportStatistics()` | `ticketCreate`、`ticketAssign`、`ticketReply`、`ticketClose`、`ticketReopen`；`supportPolicySave` 对应 `support_policy` |
+| risk | `riskRules()`、`riskCases()`、`myRisk()` | `riskRulePublish`、`riskScan`、`riskCaseOpen`、`riskCaseDecide` |
+
+修改已有对象使用 `id` 与最新 `version`；首次创建的活动、模板、风险规则或工单政策版本为 0。所有命令保留原请求键；同键不同内容返回 `IDEMPOTENCY_CONFLICT`。批次保存条目编号与版本，独立复核重新验证。
+
+调整依据包含 `owner`、`task_id`、`basis_key`、`source`、`evidence`、`amount_cents`、`reason`；部分失效可传 `invalid_base_cents`，恢复传 `restores`。`amount_cents` 为正整数分，方向由是否恢复确定；待审取消不产生确认数调减。`pending_location`、`pending`、`awaiting_resolution`、`applied`、`rejected` 分别表示待定位、待独立复核、关联业务待核查、已生效、已驳回；`dispute_recorded` 表示已登记结算争议经明确人工结论记录结案，不产生自动追偿或未来抵扣。
+
+工单创建包含 `category`、`description`、`related_id`、可选 `evidence`；回复包含 `body`、`internal`、`attachments` 与原因。附件使用 `support_attachment` 上传用途；查看采用现有 `filePath(id, reason)`，服务端重新校验工单与内部备注可见性。
+
+风险规则条件显式配置；自动命中只生成待核查单。`riskCaseDecide` 接受 `observe`、`restrict`、`hold_source`、`release`。`restrict` 限定 `scope` 为 `task_claim` 或 `withdrawal_apply` 并要求 `expires_at`；`hold_source` 指定 `source`、`amount_cents`，还需数字审核权限。数字暂缓解除需要复核权限。
+
+外部发送不通过浏览器确认：`notificationDelivery` 始终拒绝伪造渠道结果。可信通知适配器使用 Rust `NotificationDelivery`／`DeliverNotification`；发送必须有用户模板授权及显式有限重试策略。站内通知不依赖外部渠道成功。

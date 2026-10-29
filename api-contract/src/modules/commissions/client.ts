@@ -5,6 +5,15 @@ import { validate } from './validation.js'
 export function createCommissions(transport: Transport) {
   const resource = createResource(transport, validate)
   return {
+ adjustmentLocate: (body: Record<string, unknown>, key: string) => resource.command<Record<string, unknown>>('adjustment_locate', body, key),
+
+    adjustments: (target?: string) => resource.read<Record<string, unknown>[]>('adjustments', target),
+    adjustmentPropose: (body: Record<string, unknown>, key: string) => resource.command<Record<string, unknown>>('adjustment_propose', body, key),
+    adjustmentReview: (body: Record<string, unknown>, key: string) => resource.command<Record<string, unknown>>('adjustment_review', body, key),
+    adjustmentBatchPreview: (body: Record<string, unknown>, key: string) => resource.command<Record<string, unknown>>('adjustment_batch_preview', body, key),
+    adjustmentBatchReview: (body: Record<string, unknown>, key: string) => resource.command<Record<string, unknown>>('adjustment_batch_review', body, key),
+
+
     source: (owner: string, source: string) => resource.read<CommissionSource>('commission_source', `${owner}|${source}`),
     summary: (target?: string) => resource.read<CommissionSummary>('commission_summary', target),
     entries: (target?: string) => resource.read<CommissionPage>('commission_entries', target),

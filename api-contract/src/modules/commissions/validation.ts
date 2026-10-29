@@ -1,7 +1,12 @@
+import { safeIntegers } from '../common/validation.js'
 import type { Request } from '../common/types.js'
 import { record } from '../common/validation.js'
 const safe = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n)
 export function validate(request: Request, value: unknown): void {
+  if (request.path.split('?')[0] === '/api/v1/community/read/adjustments') {
+    if (!Array.isArray(value) || !value.every(item => record(item) && typeof item.id === 'string' && Number.isSafeInteger(item.version)) || !safeIntegers(value)) throw new Error('业务列表响应不符合契约')
+  }
+
  const section = request.path.split('/').pop()?.split('?')[0]
  if (!record(value) && !Array.isArray(value)) throw new Error('业务响应不符合契约')
  if (section === 'commission_summary') {

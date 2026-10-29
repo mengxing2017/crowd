@@ -10,7 +10,7 @@ assert.ok(entry.statements.length > 0 && entry.statements.every(statement => ts.
 const output = await mkdtemp(join(tmpdir(), 'crowd-community-contract-'))
 let community
 let domains
-const domainNames = ['commissions', 'withdrawals', 'settlements', 'identity', 'catalog', 'attribution', 'tasks', 'governance', 'receipts', 'promotion', 'audit', 'support', 'files', 'platform', 'common', 'system']
+const domainNames = ['campaigns', 'notifications', 'risk', 'commissions', 'withdrawals', 'settlements', 'identity', 'catalog', 'attribution', 'tasks', 'governance', 'receipts', 'promotion', 'audit', 'support', 'files', 'platform', 'common', 'system']
 try {
   const program = ts.createProgram(['community', ...domainNames].map(domain => fileURLToPath(new URL(`../src/modules/${domain}/index.ts`, import.meta.url))), {
     target: ts.ScriptTarget.ES2022,
@@ -250,3 +250,56 @@ const receiptFixture = JSON.parse(await readFile(new URL('../fixtures/receipt-co
 const receiptClient = domains.receipts.createReceipts(async () => ({ data: receiptFixture, request_id: 'receipt-fixture' }))
 assert.deepEqual(await receiptClient.receiptReveal({ id: 'first', reason: '本人核对' }, 'receipt-key'), receiptFixture)
 await assert.rejects(domains.receipts.createReceipts(async () => ({ data: { ...receiptFixture, confirmed_at: 1 }, request_id: 'invalid-receipt' })).receiptReveal({ id: 'first', reason: '核对' }, 'receipt-key'))
+
+// M20–M24 domain clients preserve the published wire envelope and original retry keys.
+for (const [domain, factory, method, section] of [
+ ['campaigns', 'createCampaigns', 'campaigns', 'campaigns'],
+ ['notifications', 'createNotifications', 'messages', 'messages'],
+ ['risk', 'createRisk', 'myRisk', 'my_risk'],
+ ['support', 'createSupport', 'tickets', 'tickets'],
+ ['commissions', 'createCommissions', 'adjustments', 'adjustments'],
+]) {
+ const client = domains[domain][factory](capture([]))
+ assert.deepEqual(await client[method](), [])
+ assert.equal(request.path, `/api/v1/community/read/${section}`)
+ assert.equal(request.method, 'GET')
+}
+for (const [domain, factory, method, action] of [
+ ['campaigns', 'createCampaigns', 'campaignSave', 'campaign_save'],
+ ['campaigns', 'createCampaigns', 'campaignTransfer', 'campaign_transfer'],
+ ['campaigns', 'createCampaigns', 'campaignArchive', 'campaign_archive'],
+ ['notifications', 'createNotifications', 'notificationRead', 'notification_read'],
+ ['notifications', 'createNotifications', 'notificationConsent', 'notification_consent'],
+ ['notifications', 'createNotifications', 'notificationTemplate', 'notification_template'],
+ ['risk', 'createRisk', 'riskRulePublish', 'risk_rule_publish'],
+ ['risk', 'createRisk', 'riskScan', 'risk_scan'],
+ ['risk', 'createRisk', 'riskCaseOpen', 'risk_case_open'],
+ ['risk', 'createRisk', 'riskCaseDecide', 'risk_case_decide'],
+ ['support', 'createSupport', 'ticketCreate', 'ticket_create'],
+ ['support', 'createSupport', 'ticketAssign', 'ticket_assign'],
+ ['support', 'createSupport', 'ticketReply', 'ticket_reply'],
+ ['support', 'createSupport', 'ticketClose', 'ticket_close'],
+ ['support', 'createSupport', 'ticketReopen', 'ticket_reopen'],
+ ['support', 'createSupport', 'supportPolicySave', 'support_policy'],
+ ['commissions', 'createCommissions', 'adjustmentPropose', 'adjustment_propose'],
+ ['commissions', 'createCommissions', 'adjustmentLocate', 'adjustment_locate'],
+ ['commissions', 'createCommissions', 'adjustmentReview', 'adjustment_review'],
+ ['commissions', 'createCommissions', 'adjustmentBatchPreview', 'adjustment_batch_preview'],
+ ['commissions', 'createCommissions', 'adjustmentBatchReview', 'adjustment_batch_review'],
+]) {
+ const client = domains[domain][factory](capture({ id: 'result', version: 1 }))
+ const input = { id: 'object', version: 1, reason: 'test' }
+ await client[method](input, 'm20-original-key')
+ assert.equal(request.path, `/api/v1/community/commands/${action}`)
+ assert.equal(request.key, 'm20-original-key')
+ assert.deepEqual(request.body, input)
+}
+for (const [factory, domain, method] of [['createCampaigns', 'campaigns', 'campaigns'], ['createNotifications', 'notifications', 'messages'], ['createRisk', 'risk', 'myRisk']]) {
+ await assert.rejects(domains[domain][factory](capture([{ id: 'unsafe', amount_cents: 1.5 }]))[method]())
+ await assert.rejects(domains[domain][factory](capture('invalid'))[method]())
+}
+const operationsFixture = JSON.parse(await readFile(new URL('../fixtures/operations.json', import.meta.url), 'utf8'))
+assert.deepEqual(await domains.campaigns.createCampaigns(capture(operationsFixture.campaigns)).campaigns(), operationsFixture.campaigns)
+assert.deepEqual(await domains.notifications.createNotifications(capture(operationsFixture.messages)).messages(), operationsFixture.messages)
+assert.deepEqual(await domains.support.createSupport(capture(operationsFixture.tickets)).tickets(), operationsFixture.tickets)
+console.log('M20–M24: owned operation clients, original retry keys, safe integers and shared Rust workflow fixture passed')
