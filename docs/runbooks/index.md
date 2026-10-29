@@ -2,6 +2,7 @@
 
 记录启动配置、岗位操作、实际验证及未验证项。历史验证保留原时点，当前佣金与人工处理以 M13–M16 手册为准。
 
+- [Docker 镜像构建、发布与部署](/runbooks/docker)
 - [嵌入式 PostgreSQL 开发与验证](/runbooks/embedded-postgres)
 - [骨架验证](/runbooks/foundation-validation)
 - [M01–M04 运行与验证](/runbooks/m01-m04)

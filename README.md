@@ -121,6 +121,8 @@ devbox run -- make test-business
 
 ## Docker
 
+完整命令见 [Docker 镜像构建、发布与部署](docs/runbooks/docker.md)。独立打包运行 `make docker-build`；构建中的 Debian APT 软件包使用中科大镜像源，与 wekeeper 保持一致。
+
 配置 `.env` 后执行 `make compose-up`，访问 http://127.0.0.1:8088。仅 Web 绑定环回端口；开发覆盖文件额外开放数据库/API 的环回端口。`make compose-down` 保留数据库卷。
 
 生产设置 `API_IMAGE`、`WEB_IMAGE` 为发布镜像，使用 `docker compose --env-file .env -f compose.yaml up -d --wait`。源码构建上下文必须为仓库根目录。Web 镜像只构建 Web 和 contract，小程序独立发布。公网部署需自行配置 HTTPS 入口。
