@@ -104,6 +104,7 @@ async fn run_business_tests(postgres: &PostgreSQL) -> Result<(), Box<dyn std::er
     for filter in [
         "validation_tests::community_postgres::",
         "validation_tests::finance_postgres::",
+        "validation_tests::operations_postgres::",
     ] {
         let mut child = tokio::process::Command::new("cargo")
             .args(["test", "--locked", "--manifest-path"])

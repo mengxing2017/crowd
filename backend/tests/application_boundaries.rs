@@ -5,6 +5,9 @@ fn application_use_cases_have_separate_owners_and_single_entrypoints() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut use_cases = 0;
     for domain in [
+        "campaigns",
+        "notifications",
+        "risk",
         "platform",
         "identity",
         "receipts",
@@ -69,6 +72,9 @@ fn application_use_cases_have_separate_owners_and_single_entrypoints() {
 fn http_and_workers_use_concrete_application_services() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     for domain in [
+        "campaigns",
+        "notifications",
+        "risk",
         "platform",
         "identity",
         "receipts",

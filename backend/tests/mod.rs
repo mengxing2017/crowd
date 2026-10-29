@@ -16,3 +16,6 @@ mod tasks_domain;
 
 #[path = "support/tasks.rs"]
 mod task_support;
+
+mod operations_domain;
+mod operations_postgres;
