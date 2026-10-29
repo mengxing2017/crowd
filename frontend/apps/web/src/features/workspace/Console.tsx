@@ -10,7 +10,7 @@ import { setToken, hasToken } from '../session/api'
 import { BusinessError } from '../platform/api'
 import { type Rule } from '../governance/api'
 import { type User } from '../identity/api'
-import { sections, type Section } from './model'
+import { sections, sectionGroups, type Section } from './model'
 const Welcome = lazy(() => import('./pages/Welcome').then(module => ({ default: module.Welcome })))
 const RuleCenter = lazy(() => import('../governance/RuleCenter').then(module => ({ default: module.RuleCenter })))
 const UserManagement = lazy(() => import('../identity/UserManagement').then(module => ({ default: module.UserManagement })))
@@ -45,6 +45,7 @@ async function readStaffSession() {
   return { user, rules }
 }
 export function Console() {
+  const [openGroups, setOpenGroups] = useState<string[]>(() => sectionGroups.map(group => `/${group.key}`))
  const [reauthOpen,setReauthOpen]=useState(false),[reauthPassword,setReauthPassword]=useState('')
   const [restoring, setRestoring] = useState(hasToken)
   const [restoreError, setRestoreError] = useState('')
@@ -52,6 +53,10 @@ export function Console() {
   const [me, setMe] = useState<User | null>(null)
   const [rules, setRules] = useState<Rule[]>([])
   const [section, setSection] = useState<Section>(currentSection)
+  useEffect(() => {
+    const group = sectionGroups.find(item => item.sections.includes(section))
+    if (group) setOpenGroups(previous => previous.includes(`/${group.key}`) ? previous : [...previous, `/${group.key}`])
+  }, [section])
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string }>()
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
@@ -108,8 +113,17 @@ export function Console() {
     setRules(nextRules); setMe(user); setNotice(undefined)
   }} />
   const available = sections.filter(item => (!item.role || me.roles.includes(item.role)) && (!item.roles || item.roles.some(role => me.roles.includes(role))))
-  const active = available.find(item => item.key === section) || available[0]
-  return <div className="admin-shell"><ProLayout title="Crowd" logo={<span className="brand-mark">C</span>} layout="mix" navTheme="light" fixSiderbar fixedHeader contentWidth="Fluid" location={{ pathname: `/${active.key}` }} route={{ path: '/', routes: available.map(item => ({ path: `/${item.key}`, name: item.title, icon: icons[item.key] })) }} menuItemRender={(item, dom) => <a href={`#${item.path}`} onClick={event => { event.preventDefault(); navigate(item.path?.slice(1) as Section) }}>{dom}</a>} avatarProps={{ icon: <UserOutlined />, title: me.nickname, render: (_, dom) => <Dropdown menu={{ items: [{ key: 'guide', label: '使用指南', icon: <BookOutlined /> }, { type: 'divider' }, { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, disabled: busy }], onClick: ({ key }) => { if (key === 'guide') navigate('guide'); else if (key === 'logout') void run(async () => { try { await executeCommand('logout', {}, crypto.randomUUID()) } finally { clearSession() } }) } }}><span className="account-menu">{dom}</span></Dropdown> }} actionsRender={() => [<Tooltip title="刷新当前账号与规则" key="refresh"><Button type="text" aria-label="刷新当前账号与规则" icon={<ReloadOutlined spin={busy} />} disabled={busy} onClick={() => void run(refresh)} /></Tooltip>, <Tooltip title="使用指南" key="guide"><Button type="text" aria-label="使用指南" icon={<BookOutlined />} onClick={() => navigate('guide')} /></Tooltip>]} footerRender={() => <footer className="workspace-footer">Crowd · 产品推广与协作平台 <span>业务数字记录 · 人工线下结算</span></footer>}>
+  const active = available.find(item => item.key === section) || available.find(item => item.key === 'welcome') || available[0]
+  const menuGroups = sectionGroups.map(group => ({
+    path: `/${group.key}`,
+    name: group.title,
+    icon: icons[group.icon],
+    routes: group.sections.flatMap(key => {
+      const item = available.find(candidate => candidate.key === key)
+      return item ? [{ path: `/${item.key}`, name: item.title, icon: icons[item.key] }] : []
+    }),
+  })).filter(group => group.routes.length > 0)
+  return <div className="admin-shell"><ProLayout title="Crowd" logo={<span className="brand-mark">C</span>} layout="side" navTheme="light" fixSiderbar fixedHeader contentWidth="Fluid" location={{ pathname: `/${active.key}` }} route={{ path: '/', routes: menuGroups }} menuProps={{ openKeys: openGroups, onOpenChange: keys => setOpenGroups(keys.map(String)) }} menuItemRender={(item, dom) => <a href={`#${item.path}`} onClick={event => { event.preventDefault(); navigate(item.path?.slice(1) as Section) }}>{dom}</a>} avatarProps={{ icon: <UserOutlined />, title: me.nickname, render: (_, dom) => <Dropdown menu={{ items: [{ key: 'guide', label: '使用指南', icon: <BookOutlined /> }, { type: 'divider' }, { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, disabled: busy }], onClick: ({ key }) => { if (key === 'guide') navigate('guide'); else if (key === 'logout') void run(async () => { try { await executeCommand('logout', {}, crypto.randomUUID()) } finally { clearSession() } }) } }}><span className="account-menu">{dom}</span></Dropdown> }} actionsRender={() => [<Tooltip title="刷新当前账号与规则" key="refresh"><Button type="text" aria-label="刷新当前账号与规则" icon={<ReloadOutlined spin={busy} />} disabled={busy} onClick={() => void run(refresh)} /></Tooltip>, <Tooltip title="使用指南" key="guide"><Button type="text" aria-label="使用指南" icon={<BookOutlined />} onClick={() => navigate('guide')} /></Tooltip>]} footerRender={() => <footer className="workspace-footer">Crowd · 产品推广与协作平台 <span>业务数字记录 · 人工线下结算</span></footer>}>
     <PageContainer title={active.title} content={active.description} breadcrumb={{ items: [{ title: '运营管理' }, { title: active.title }] }} extra={<Tag color="blue">{me.status === 'active' ? '正常工作中' : '账号受限'}</Tag>}>
       <Space orientation="vertical" size={20} className="full-width">
         <Button disabled={busy} onClick={() => setReauthOpen(true)}>高风险操作：再次验证当前会话</Button>

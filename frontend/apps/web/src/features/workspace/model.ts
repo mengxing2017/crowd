@@ -22,3 +22,12 @@ export const sections: { key: Section; title: string; description: string; role?
   { key: 'audit', title: '审计日志', description: '按业务对象追踪操作与处理结果', role: 'auditor' },
   { key: 'guide', title: '使用指南', description: '了解业务边界、岗位权限与操作流程' },
 ]
+
+export const sectionGroups: { key: string; title: string; icon: Section; sections: Section[] }[] = [
+  { key: 'overview', title: '工作台与消息', icon: 'welcome', sections: ['welcome', 'notifications', 'guide'] },
+  { key: 'promotion', title: '产品与推广', icon: 'catalog', sections: ['catalog', 'campaigns', 'promotions', 'attribution'] },
+  { key: 'execution', title: '任务管理', icon: 'tasks', sections: ['taskRules', 'tasks'] },
+  { key: 'settlement', title: '佣金与人工结算', icon: 'commissions', sections: ['commissions', 'withdrawalRules', 'settlements', 'adjustments'] },
+  { key: 'service', title: '客服与风险', icon: 'support', sections: ['support', 'risk'] },
+  { key: 'administration', title: '系统与治理', icon: 'security', sections: ['users', 'security', 'rules', 'privacy', 'reporting', 'audit'] },
+]
