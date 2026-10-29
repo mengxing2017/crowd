@@ -19,3 +19,7 @@ mod task_support;
 
 mod operations_domain;
 mod operations_postgres;
+
+mod governance_domain;
+
+mod governance_postgres;

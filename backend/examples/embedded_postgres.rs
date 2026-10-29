@@ -105,6 +105,7 @@ async fn run_business_tests(postgres: &PostgreSQL) -> Result<(), Box<dyn std::er
         "validation_tests::community_postgres::",
         "validation_tests::finance_postgres::",
         "validation_tests::operations_postgres::",
+        "validation_tests::governance_postgres::",
     ] {
         let mut child = tokio::process::Command::new("cargo")
             .args(["test", "--locked", "--manifest-path"])
@@ -119,6 +120,11 @@ async fn run_business_tests(postgres: &PostgreSQL) -> Result<(), Box<dyn std::er
             ])
             // Always override inherited test URLs; never forward an external application URL.
             .env_remove("CROWD_DATABASE_URL")
+            .env(
+                "CROWD_TASK_SOURCE_GOVERNANCE_TEST_SECRET",
+                "governance-test-secret-32-characters",
+            )
+            .env("CROWD_TASK_SOURCE_GOVERNANCE_TEST_WINDOW_SECONDS", "300")
             .env(
                 "CROWD_TEST_DATABASE_URL",
                 postgres
