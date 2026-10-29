@@ -1,6 +1,6 @@
 # Docker 镜像构建、发布与部署
 
-本文参考 `../keeper/wekeeper` 的 Dockerfile 和运行手册，按 Crowd 当前配置整理。所有命令均从仓库根目录执行；版本号、仓库域名和凭据须替换为实际值。
+本文按 Crowd 当前 Dockerfile 和部署配置整理。所有命令均从仓库根目录执行；版本号、仓库域名和凭据须替换为实际值。
 
 ## 交付内容与下载源
 
@@ -12,12 +12,12 @@
 
 `api-contract` 不单独部署；微信小程序不进入 Web 镜像，另行构建并上传微信平台。嵌入式 PostgreSQL 仅用于源码开发/测试。
 
-下载源边界与 wekeeper 一致：
+构建下载源配置如下：
 
 - **APT 软件包使用中科大** `mirrors.ustc.edu.cn`。API 运行阶段安装 `ca-certificates`、`curl` 前，替换传统 `sources.list` 和 Deb822 `debian.sources` 中的 Debian 主仓库、安全更新仓库地址，再更新索引、安装并清理缓存。
 - 当前 API 构建阶段和 Web 镜像没有 APT/APK 安装命令。以后新增系统软件安装时，也应先配置对应的中科大软件包源。
 - 基础镜像仍从官方 Docker Hub 拉取；APT 换源不等于 Docker Engine 的镜像拉取加速配置，也不将中科大软件包站点当作应用镜像发布仓库。
-- Cargo 依赖仍用 crates.io；npm/pnpm 仍用 `https://registry.npmjs.org/`，与参考项目保持相同边界。这里不虚构中科大 npm 或 Cargo 镜像地址。
+- Cargo 依赖仍用 crates.io；npm/pnpm 仍用 `https://registry.npmjs.org/`，保持各自的公共源配置。这里不虚构中科大 npm 或 Cargo 镜像地址。
 
 构建机需安装 Docker Engine、支持 `up --wait` 的 Compose v2，并能访问上述下载源。运行服务器无需 Rust、Node 或 pnpm。
 
@@ -153,4 +153,4 @@ test -s crowd-backup.dump
 
 下载失败时使用 `docker build --progress=plain ...` 查看具体阶段：基础镜像拉取检查 Docker 仓库/DNS；APT 检查中科大源连通性；Cargo/npm 检查各自公共源。不要关闭 TLS 证书校验。就绪失败查看 API migration、数据库连接和数据库日志。
 
-2026-10-29：按本仓库及 wekeeper 配置核对构建上下文、镜像名称、端口、换源逻辑和命令。当前编辑环境未安装 Docker，未执行真实镜像构建、Compose 启动、镜像推送、离线导入或跨架构验证。这些操作须在具备 Docker 的隔离环境执行；容器就绪也不等于业务验收或官方到账验证。
+2026-10-29：按本仓库配置核对构建上下文、镜像名称、端口、换源逻辑和命令。当前编辑环境未安装 Docker，未执行真实镜像构建、Compose 启动、镜像推送、离线导入或跨架构验证。这些操作须在具备 Docker 的隔离环境执行；容器就绪也不等于业务验收或官方到账验证。

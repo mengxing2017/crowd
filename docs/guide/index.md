@@ -70,7 +70,7 @@ docs/requirements/     M01–M16 需求与实现、依赖的追踪表
 
 工具版本：Rust 1.97.1、Node 22、pnpm 11.22.0，使用 `devbox shell` 进入环境。
 
-本地开发默认使用与 `../wekeeper` 相同的嵌入式 PostgreSQL 17，无需 Docker 或手动建库：
+本地开发默认使用嵌入式 PostgreSQL 17，无需 Docker 或手动建库：
 
 ```bash
 make install

@@ -79,7 +79,7 @@ docs/requirements/     M01–M24 需求与实现、依赖的追踪表
 
 工具版本：Rust 1.97.1、Node 22、pnpm 11.22.0，使用 `devbox shell` 进入环境。
 
-本地开发默认使用与 `../wekeeper` 相同的嵌入式 PostgreSQL 17，无需 Docker 或手动建库：
+本地开发默认使用嵌入式 PostgreSQL 17，无需 Docker 或手动建库：
 
 ```bash
 make install
@@ -121,7 +121,7 @@ devbox run -- make test-business
 
 ## Docker
 
-完整命令见 [Docker 镜像构建、发布与部署](docs/runbooks/docker.md)。独立打包运行 `make docker-build`；构建中的 Debian APT 软件包使用中科大镜像源，与 wekeeper 保持一致。
+完整命令见 [Docker 镜像构建、发布与部署](docs/runbooks/docker.md)。独立打包运行 `make docker-build`；构建中的 Debian APT 软件包使用中科大镜像源。
 
 配置 `.env` 后执行 `make compose-up`，访问 http://127.0.0.1:8088。仅 Web 绑定环回端口；开发覆盖文件额外开放数据库/API 的环回端口。`make compose-down` 保留数据库卷。
 

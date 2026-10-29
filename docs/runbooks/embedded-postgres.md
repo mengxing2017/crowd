@@ -1,6 +1,6 @@
 # 嵌入式 PostgreSQL 开发与验证
 
-本次参考 `../wekeeper/backend/examples/embedded_postgres.rs` 和生命周期检查方式，使用 `postgresql_embedded 0.21` 管理真实 PostgreSQL 17 子进程，业务仍通过 SQLx/PostgreSQL 适配器访问数据库，不是内存数据库或数据库模拟。
+本项目使用 `postgresql_embedded 0.21` 管理真实 PostgreSQL 17 子进程，业务仍通过 SQLx/PostgreSQL 适配器访问数据库，不是内存数据库或数据库模拟。
 
 ## 运行
 
