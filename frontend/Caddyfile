@@ -1,12 +1,12 @@
-:80 {
+{$CROWD_WEB_LISTEN::80} {
     handle /api/* {
-        reverse_proxy api:8080
+        reverse_proxy {$CROWD_API_UPSTREAM:api:8080}
     }
     handle /healthz {
-        reverse_proxy api:8080
+        reverse_proxy {$CROWD_API_UPSTREAM:api:8080}
     }
     handle /readyz {
-        reverse_proxy api:8080
+        reverse_proxy {$CROWD_API_UPSTREAM:api:8080}
     }
     handle {
         root * /srv
