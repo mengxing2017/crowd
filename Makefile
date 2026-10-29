@@ -61,3 +61,9 @@ docs-build:
 	pnpm --dir docs build
 docs-preview:
 	pnpm --dir docs preview
+
+.PHONY: delivery-validate check-delivery
+delivery-validate:
+	python3 tools/check_delivery.py --validate-only
+check-delivery:
+	python3 tools/check_delivery.py

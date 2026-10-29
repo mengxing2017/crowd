@@ -1,0 +1,272 @@
+{
+  "reports": [
+    "31",
+    "32",
+    "33",
+    "35"
+  ],
+  "cases": [
+    {
+      "id": "E2E-001",
+      "scenario": "并发注册与唯一主推广码",
+      "tests": [
+        "community_domain::registration_is_unique_and_collision_never_overwrites_owner",
+        "community_postgres::postgres_registration_sessions_files_and_concurrent_commands"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-002",
+      "scenario": "推广码与收款码分离",
+      "tests": [
+        "community_domain::receipts_are_append_only_masked_and_never_change_original_snapshot"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-003",
+      "scenario": "无资金前置上架及缺规则拒绝",
+      "tests": [
+        "catalog_domain::missing_rules_images_and_fractional_cents_cannot_be_published"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-004",
+      "scenario": "新旧定价快照",
+      "tests": [
+        "tasks_domain::independent_rule_review_overlap_and_immutable_versions",
+        "catalog_domain::claiming_preserves_snapshots_quota_and_no_automatic_commission"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-005",
+      "scenario": "最后名额并发",
+      "tests": [
+        "operations_postgres::operations_concurrent_quota_idempotency_ownership_and_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-006",
+      "scenario": "重复提交成果",
+      "tests": [
+        "tasks_domain::ordered_steps_drafts_preview_and_immutable_receipt",
+        "community_postgres::postgres_registration_sessions_files_and_concurrent_commands"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-007",
+      "scenario": "补交保留历史且不确认数字",
+      "tests": [
+        "tasks_domain::supplement_new_version_preserves_old_and_only_requested_fields"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-008",
+      "scenario": "拒绝不生成可申请数字",
+      "tests": [
+        "finance_domain::pending_rejected_and_confirmed_task_digits_reconcile_only_once"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-009",
+      "scenario": "通过只确认业务数字",
+      "tests": [
+        "tasks_domain::exclusive_review_withdrawal_sensitive_access_and_single_confirmation"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-010",
+      "scenario": "重复通过不重复确认",
+      "tests": [
+        "finance_domain::pending_rejected_and_confirmed_task_digits_reconcile_only_once"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-011",
+      "scenario": "并发申请不超占用",
+      "tests": [
+        "finance_postgres::concurrent_holds_cancel_claim_race_idempotency_and_registration_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-012",
+      "scenario": "收款图片格式和大小",
+      "tests": [
+        "community_postgres::postgres_registration_sessions_files_and_concurrent_commands"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-013",
+      "scenario": "私有图权限与留痕",
+      "tests": [
+        "community_postgres::postgres_registration_sessions_files_and_concurrent_commands"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-014",
+      "scenario": "微信收款快照不覆盖",
+      "tests": [
+        "finance_domain::application_holds_once_keeps_receipt_snapshot_and_source_allocations"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-015",
+      "scenario": "支付宝只做形式检查",
+      "tests": [
+        "receipt_management::alipay_draft_requires_new_confirmation_under_explicit_format_policy"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-016",
+      "scenario": "客服脱敏与经办授权查看",
+      "tests": [
+        "finance_domain::absent_rule_draft_alipay_restrictions_and_data_scope_fail_closed",
+        "finance_postgres::concurrent_holds_cancel_claim_race_idempotency_and_registration_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-017",
+      "scenario": "修改资料不改变旧申请",
+      "tests": [
+        "receipt_management::stale_or_unconfirmed_updates_preserve_receipt_and_application_snapshot"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-018",
+      "scenario": "缺资料不占用",
+      "tests": [
+        "receipt_management::draft_cannot_be_used_even_when_alipay_policy_was_later_enabled",
+        "finance_domain::absent_rule_draft_alipay_restrictions_and_data_scope_fail_closed"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-019",
+      "scenario": "审核通过仅待人工处理",
+      "tests": [
+        "finance_domain::handling_unknown_never_releases_and_requires_confirmed_unpaid_stop"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-020",
+      "scenario": "重复驳回只释放一次",
+      "tests": [
+        "finance_domain::cancellation_and_rejection_release_exactly_once"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-021",
+      "scenario": "用户撤销和经办领取竞争",
+      "tests": [
+        "finance_postgres::concurrent_holds_cancel_claim_race_idempotency_and_registration_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-022",
+      "scenario": "两个经办竞争领取",
+      "tests": [
+        "finance_domain::handling_unknown_never_releases_and_requires_confirmed_unpaid_stop",
+        "finance_postgres::concurrent_holds_cancel_claim_race_idempotency_and_registration_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-023",
+      "scenario": "结果不明责任人与保留占用",
+      "tests": [
+        "finance_domain::report32_handling_history_unknown_responsibility_and_return_resolution"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-024",
+      "scenario": "缺凭证登记被拒",
+      "tests": [
+        "finance_postgres::concurrent_holds_cancel_claim_race_idempotency_and_registration_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-025",
+      "scenario": "1000确认600登记后可申请400",
+      "tests": [
+        "finance_domain::manual_registration_independent_verification_and_post_settlement_corrections"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-026",
+      "scenario": "登记结果丢失与同键恢复",
+      "tests": [
+        "finance_postgres::concurrent_holds_cancel_claim_race_idempotency_and_registration_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-027",
+      "scenario": "确认未付且停止后一次释放",
+      "tests": [
+        "finance_domain::report32_handling_history_unknown_responsibility_and_return_resolution"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-028",
+      "scenario": "更正保留原登记且不代表退款",
+      "tests": [
+        "finance_domain::manual_registration_independent_verification_and_post_settlement_corrections"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-029",
+      "scenario": "已登记后失效进入争议",
+      "tests": [
+        "finance_domain::settled_disputes_keep_old_registration_without_future_deductions"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-030",
+      "scenario": "内部数字差异与人工凭证核查分开",
+      "tests": [
+        "governance_domain::reconciliation_detects_duplicate_keys_and_unknown_results_keep_occupancy"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-031",
+      "scenario": "注销保护未结申请",
+      "tests": [
+        "governance_domain::privacy_copy_is_owned_expires_and_closure_preserves_pending_snapshots"
+      ],
+      "manual_acceptance": "pending"
+    },
+    {
+      "id": "E2E-032",
+      "scenario": "故障恢复查原结果并补录",
+      "tests": [
+        "finance_postgres::concurrent_holds_cancel_claim_race_idempotency_and_registration_failure_recovery"
+      ],
+      "manual_acceptance": "pending"
+    }
+  ]
+}
