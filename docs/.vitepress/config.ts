@@ -149,6 +149,7 @@ export default defineConfig({
             "link": "/runbooks/"
           },
           {"text": "Docker 镜像构建、发布与部署", "link": "/runbooks/docker"},
+          {"text": "1Panel 部署与首次管理员初始化", "link": "/runbooks/1panel"},
           {
             "text": "嵌入式 PostgreSQL 开发与验证",
             "link": "/runbooks/embedded-postgres"
