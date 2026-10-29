@@ -38,6 +38,8 @@ POSTGRES_PASSWORD=替换为第一次生成的48位十六进制字符串
 API_IMAGE=registry.example.com/team/crowd-api:实际版本
 WEB_IMAGE=registry.example.com/team/crowd-web:实际版本
 WEB_PORT=8088
+CROWD_WEB_LISTEN=:80
+CROWD_API_UPSTREAM=api:8080
 CROWD_BOOTSTRAP_ADMIN_USERNAME=admin
 CROWD_BOOTSTRAP_ADMIN_PASSWORD=替换为第二次生成的48位十六进制字符串
 CROWD_BOOTSTRAP_PLATFORM_ID=
@@ -66,7 +68,7 @@ Compose 固定数据库名/用户为 `crowd`，API 监听 `0.0.0.0:8080`、数�
 
 ## 方案二：1Panel 分别创建三个容器
 
-三个容器加入同一自定义网络 `crowd-standalone`。以下名称和网络别名要保持一致，尤其是 **API 的网络别名必须包含 `api`**，因为当前 Web Caddyfile 固定代理到 `api:8080`。
+三个容器加入同一自定义网络 `crowd-standalone`。以下名称和网络别名要保持一致，尤其是 **API 的网络别名必须包含 `api`**，因为 Web 默认上游为 `api:8080`；自定义地址见下方 Web 环境变量。
 
 | 容器名 | 镜像 | 网络别名 | 端口映射 | 持久化 |
 | --- | --- | --- | --- | --- |
@@ -113,16 +115,34 @@ RUST_LOG=info
 
 `docker run --env-file` 不展开 `$变量`，填写实际值，不要写 `$POSTGRES_PASSWORD` 占位。API 启动先迁移，再执行管理员初始化，最后监听 HTTP。
 
-### Web 配置
+### Web 环境变量
 
-当前 Web 镜像没有需填写的业务环境变量，也不读取自定义上游环境变量。监听固定 `:80`、上游固定 `api:8080`；用前述网络别名连接即可。Web 不配置数据库密码、微信 AppSecret 或管理员密码。浏览器使用同源 `/api/*`，不要把容器内部 URL 填给前端。
+可保存为 `.env.web`，或逐项填写到 1Panel 的 Web 容器环境配置：
+
+```dotenv
+CROWD_WEB_LISTEN=:80
+CROWD_API_UPSTREAM=api:8080
+```
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `CROWD_WEB_LISTEN` | `:80` | Caddy 容器内监听地址；1Panel 端口映射和入口代理须与其端口一致 |
+| `CROWD_API_UPSTREAM` | `api:8080` | Web 容器可访问的 API 主机名及端口；不带 `/api` 路径 |
+
+默认上游对应前述 API 网络别名 `api`。如果 API 容器名为 `crowd-api` 且在同一网络，也可填写 `CROWD_API_UPSTREAM=crowd-api:8080`；外部 API 则填写实际可达的上游地址。容器内 `127.0.0.1` 是 Web 容器自身，不能用它访问另一个 API 容器。
+
+这两个变量在容器启动时由 Caddy 读取，无需为不同 API 地址重新编译 React。首次启用需要使用包含环境变量支持的新 Web 镜像，旧镜像不会读取它们。修改 `.env.web` 后须重新创建 Web 容器；单纯重启不会加载新的环境文件内容。
+
+Compose 方式将同样两项写入项目 `.env`，由 `compose.yaml` 注入 Web。`WEB_IMAGE`、`WEB_PORT` 分别控制镜像和宿主机端口映射，不是 Web 进程的环境变量；当前编排映射到容器 80，因此保持 `CROWD_WEB_LISTEN=:80`。独立容器在 1Panel 直接配置镜像和端口映射。
+
+浏览器继续使用同源 `/api/*`，由 Caddy 转发；不要把容器内部地址填到浏览器。`CROWD_API_ORIGIN` 仅用于源码开发的 Vite 代理，`VITE_API_ORIGIN` 不用于管理端运行配置。Web 不配置数据库密码、微信 AppSecret 或管理员密码。
 
 ### 等价终端操作与检查
 
-以下命令在服务器宿主机终端执行，不是在容器终端执行。先准备上述两个环境文件并替换镜像标签；已有同名网络/容器时使用现有资源，不重复创建。
+以下命令在服务器宿主机终端执行，不是在容器终端执行。先准备上述三个环境文件并替换镜像标签；已有同名网络/容器时使用现有资源，不重复创建。
 
 ```bash
-chmod 600 .env.postgres .env.api
+chmod 600 .env.postgres .env.api .env.web
 docker network create crowd-standalone
 docker run -d --name crowd-postgres --network crowd-standalone --network-alias postgres \
   --restart unless-stopped --env-file .env.postgres \
@@ -144,7 +164,7 @@ API 就绪成功后再启动 Web：
 
 ```bash
 docker run -d --name crowd-web --network crowd-standalone --network-alias web \
-  --restart unless-stopped -p 127.0.0.1:8088:80 \
+  --restart unless-stopped --env-file .env.web -p 127.0.0.1:8088:80 \
   -v crowd-standalone-caddy-data:/data -v crowd-standalone-caddy-config:/config \
   registry.example.com/team/crowd-web:实际版本
 curl --fail --show-error http://127.0.0.1:8088/readyz
@@ -162,7 +182,7 @@ curl --fail --show-error http://127.0.0.1:8088/readyz
 4. 上传请求体上限与代理超时按应用上传需求配置，避免入口提前拒绝图片/任务证据；不要在代理缓存鉴权接口或私有附件。
 5. 检查 `https://实际域名/readyz`，再通过域名首页登录管理端。小程序独立配置 HTTPS API 地址和微信合法请求/下载域名。
 
-当前应用 Caddy 仅提供 HTTP，不支持通过环境变量直接开启自动 HTTPS；证书由 1Panel 入口管理。不要套用其他应用的监听、上游或登录模式环境变量。
+本手册使用 `CROWD_WEB_LISTEN=:80` 提供容器内 HTTP，公网 HTTPS 证书由 1Panel 入口管理。
 
 ## 首次安装后生成 admin 密码并初始化
 
