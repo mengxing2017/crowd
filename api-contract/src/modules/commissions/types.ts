@@ -1,4 +1,4 @@
-export interface CommissionSummary { owner: string; currency: 'CNY'; version: number; pending_cents: number; confirmed_cents: number; available_cents: number; held_cents: number; disputed_cents: number; settled_cents: number; consistent: boolean; notice: string }
+export interface CommissionSummary { owner: string; currency: 'CNY'; version: number; pending_cents: number; confirmed_cents: number; gross_confirmed_cents?: number; adjustment_cents?: number; available_cents: number; held_cents: number; disputed_cents: number; settled_cents: number; consistent: boolean; notice: string }
 export interface CommissionEntry { id: string; key: string; owner: string; kind: string; amount_cents: number; source: string; actor: string; at: number; currency: 'CNY'; detail: Record<string, unknown>; external_payment: false }
 export interface CommissionPage { items: CommissionEntry[]; next_cursor: number | null; total: number }
 export interface CommissionProposal { id: string; owner: string; new_owner?: string; amount_cents: number; source: string; business_key: string; actor: string; reason: string; status: string }

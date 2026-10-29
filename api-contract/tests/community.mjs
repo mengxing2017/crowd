@@ -328,3 +328,17 @@ for (const [domain, factory, method, section] of [
  assert.equal(request.path, `/api/v1/community/read/${section}?target=scope%2Fa%3F`)
 }
 console.log('M25–M29: reporting/privacy owned routes, encoded scopes, safe integers and original retry keys passed')
+
+// Reports 31–35: additive values remain compatible with older servers and errors.
+assert.equal(domains.withdrawals.withdrawalStatusLabel({ status: 'rejected', resolution: 'returned_unpaid' }), '已退回（确认未付款）')
+assert.equal(domains.withdrawals.withdrawalStatusLabel({ status: 'unknown' }), '待核实')
+const digitalSummary = JSON.parse(await readFile(new URL('../fixtures/commission-summary.json', import.meta.url), 'utf8'))
+for (const field of ['gross_confirmed_cents', 'adjustment_cents']) {
+ await assert.rejects(domains.commissions.createCommissions(capture({ ...digitalSummary, [field]: 0.5 })).summary('alice'))
+}
+const legacySummary = { ...digitalSummary }
+delete legacySummary.gross_confirmed_cents
+delete legacySummary.adjustment_cents
+assert.deepEqual(await domains.commissions.createCommissions(capture(legacySummary)).summary('alice'), legacySummary)
+await assert.rejects(domains.commissions.createCommissions(async () => ({ error: { code: 'INSUFFICIENT_AVAILABLE', business_code: 'MARKER_AMOUNT_INSUFFICIENT', message: '数字不足', request_id: 'delivery-contract' } })).summary('alice'), error => error.detail.code === 'INSUFFICIENT_AVAILABLE' && error.detail.business_code === 'MARKER_AMOUNT_INSUFFICIENT')
+console.log('Reports 31–35: digital calculation fields, legacy summaries, returned-state labels and compatible error semantics passed')

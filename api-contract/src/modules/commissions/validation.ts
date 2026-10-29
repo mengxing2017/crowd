@@ -12,6 +12,7 @@ export function validate(request: Request, value: unknown): void {
  if (section === 'commission_summary') {
   if (!record(value) || value.currency !== 'CNY' || typeof value.consistent !== 'boolean' || !['version','pending_cents','confirmed_cents','available_cents','held_cents','disputed_cents','settled_cents'].every(k => safe(value[k]))) throw new Error('佣金汇总不符合整数分契约')
  }
+ if (section === 'commission_summary' && record(value) && !['gross_confirmed_cents', 'adjustment_cents'].every(k => value[k] === undefined || safe(value[k]))) throw new Error('佣金累计和调整数字必须是整数分')
  if (section === 'commission_entries') {
   if (!record(value) || !Array.isArray(value.items) || !safe(value.total) || !(value.next_cursor === null || safe(value.next_cursor)) || !value.items.every(e => record(e) && safe(e.amount_cents) && typeof e.id === 'string')) throw new Error('流水分页响应无效')
  }
