@@ -3,7 +3,7 @@ WORKDIR /app/backend
 COPY backend/ ./
 RUN cargo build --release --locked
 FROM debian:bookworm-slim
-# Match wekeeper: use USTC for Debian packages, including security updates.
+# Use USTC for Debian packages, including security updates.
 RUN if [ -f /etc/apt/sources.list ]; then \
       sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g; s/security.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list; \
     fi \
