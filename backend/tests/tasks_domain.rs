@@ -253,6 +253,12 @@ fn exclusive_review_withdrawal_sensitive_access_and_single_confirmation() {
         125,
     );
     assert_eq!(result["status"], "approved");
+    assert!(result["decisions"][0]["id"].as_str().is_some());
+    assert_eq!(result["decisions"][0]["task_id"], "a");
+    assert_eq!(
+        result["decisions"][0]["submission_id"],
+        result["receipt"]["id"]
+    );
     assert_eq!(s.tasks.confirmations.len(), 1);
     assert_eq!(s.tasks.changes.len(), 1);
     assert_eq!(s.tasks.confirmations["a"]["withdrawable"], true);

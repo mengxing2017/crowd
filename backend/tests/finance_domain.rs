@@ -779,3 +779,159 @@ fn receipt_exception_keeps_hold_blocks_registration_and_requires_original_handle
         1000
     );
 }
+
+#[test]
+fn report31_separates_confirmed_and_adjustment_and_rejects_balanced_duplicate_holds() {
+    let mut s = setup();
+    ledger::append(
+        &mut s,
+        "adjust",
+        "alice",
+        "decrease",
+        400,
+        "task",
+        "reviewer",
+        101,
+        json!({}),
+    )
+    .unwrap();
+    let sum = ledger::summary(&s, "alice").unwrap();
+    assert_eq!(sum["gross_confirmed_cents"], 1000);
+    assert_eq!(sum["adjustment_cents"], -400);
+    assert_eq!(sum["available_cents"], 600);
+    apply(&mut s, "a", 600);
+    let detail = s
+        .commissions
+        .entries
+        .iter()
+        .find(|e| e["kind"] == "hold")
+        .unwrap()["detail"]
+        .clone();
+    ledger::append(
+        &mut s,
+        "bad-hold",
+        "alice",
+        "hold",
+        600,
+        "a",
+        "handler",
+        104,
+        detail.clone(),
+    )
+    .unwrap();
+    ledger::append(
+        &mut s,
+        "bad-release",
+        "alice",
+        "release",
+        600,
+        "a",
+        "handler",
+        105,
+        detail,
+    )
+    .unwrap();
+    // A matching net hold does not excuse two original reservations for the same request.
+    assert_eq!(ledger::summary(&s, "alice").unwrap()["held_cents"], 600);
+    assert_eq!(ledger::summary(&s, "alice").unwrap()["consistent"], false);
+    assert!(withdrawals::command(&mut s,"alice","withdrawal_preview",&json!({"amount_cents":100,"receipt_id":"receipt","receipt_version":2,"summary_version":5}),"blocked",106).is_err());
+}
+
+#[test]
+fn report32_handling_history_unknown_responsibility_and_return_resolution() {
+    let mut s = setup();
+    apply(&mut s, "a", 600);
+    ready(&mut s, "a");
+    process(&mut s, "handler", "settlement_claim", "a", json!({})).unwrap();
+    let handling = s.withdrawals.applications["a"]["handling"].clone();
+    assert_eq!(handling["request_id"], "a");
+    process(
+        &mut s,
+        "handler",
+        "settlement_handoff",
+        "a",
+        json!({"to":"other","paid_status":"unpaid"}),
+    )
+    .unwrap();
+    process(&mut s, "other", "settlement_handoff_accept", "a", json!({})).unwrap();
+    process(
+        &mut s,
+        "other",
+        "settlement_handoff",
+        "a",
+        json!({"to":"handler","paid_status":"unknown"}),
+    )
+    .unwrap();
+    process(
+        &mut s,
+        "handler",
+        "settlement_handoff_accept",
+        "a",
+        json!({}),
+    )
+    .unwrap();
+    process(&mut s, "handler", "settlement_unknown", "a", json!({})).unwrap();
+    assert_eq!(
+        s.withdrawals.applications["a"]["uncertainty_assignee"],
+        "handler"
+    );
+    assert_eq!(ledger::summary(&s, "alice").unwrap()["held_cents"], 600);
+    let handoffs: Vec<_> = s.withdrawals.applications["a"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["action"] == "settlement_handoff")
+        .collect();
+    assert_eq!(handoffs[0]["handoff"]["to"], "other");
+    assert_eq!(handoffs[1]["handoff"]["paid_status"], "unknown");
+    assert_eq!(s.withdrawals.applications["a"]["handling"], handling);
+    process(
+        &mut s,
+        "handler",
+        "settlement_confirm_unpaid",
+        "a",
+        json!({"confirmed_unpaid":true,"processing_stopped":true}),
+    )
+    .unwrap();
+    assert_eq!(
+        s.withdrawals.applications["a"]["resolution"],
+        "returned_unpaid"
+    );
+    assert_eq!(
+        ledger::summary(&s, "alice").unwrap()["available_cents"],
+        1000
+    );
+    assert!(
+        process(
+            &mut s,
+            "handler",
+            "settlement_confirm_unpaid",
+            "a",
+            json!({"confirmed_unpaid":true,"processing_stopped":true})
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn report33_official_payment_claims_are_rejected_without_state_changes() {
+    let mut s = setup();
+    apply(&mut s, "a", 600);
+    ready(&mut s, "a");
+    process(&mut s, "handler", "settlement_claim", "a", json!({})).unwrap();
+    let before = serde_json::to_value(&s).unwrap();
+    for claim in [
+        json!({"official_verified":true}),
+        json!({"payload":{"payment_verified":true}}),
+        json!({"gateway_response":{"status":"success"}}),
+    ] {
+        assert_eq!(
+            s.check_command_access("handler", "settlement_register", &claim)
+                .unwrap_err()
+                .0,
+            "INVALID_INPUT"
+        );
+        assert!(process(&mut s, "handler", "settlement_register", "a", claim).is_err());
+        assert_eq!(serde_json::to_value(&s).unwrap(), before);
+    }
+}

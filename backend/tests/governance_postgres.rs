@@ -76,6 +76,22 @@ async fn governance_transaction_audit_export_reauthentication_and_signed_events(
             .await
             .is_err()
     );
+    // Seed within rolled-back transactions so these guards also work as standalone tests.
+    for (seed, mutation) in [
+        (
+            "UPDATE crowd_state SET document=jsonb_set(document,'{commissions,entries}',COALESCE(document#>'{commissions,entries}','[]'::jsonb) || '[{\"id\":\"guard-test\"}]'::jsonb)",
+            "UPDATE crowd_state SET document=jsonb_set(document,'{commissions,entries}','[]'::jsonb)",
+        ),
+        (
+            "UPDATE crowd_state SET document=jsonb_set(document,'{withdrawals,applications,guard-test}','{\"owner\":\"gov-alice\",\"amount_cents\":100,\"receipt_snapshot\":{\"version\":1},\"rule\":{\"version\":1},\"registration\":null}'::jsonb)",
+            "UPDATE crowd_state SET document=jsonb_set(document,'{withdrawals,applications,guard-test,receipt_snapshot}','{}'::jsonb)",
+        ),
+    ] {
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query(seed).execute(&mut *tx).await.unwrap();
+        assert!(sqlx::query(mutation).execute(&mut *tx).await.is_err());
+        tx.rollback().await.unwrap();
+    }
     let mut tx = repo.begin().await.unwrap();
     let mut s = Repository::load(&mut tx).await.unwrap();
     s.security.policy = json!({"version":1,"reauth_seconds":60,"actions":["export_request"]});
@@ -156,6 +172,16 @@ async fn governance_transaction_audit_export_reauthentication_and_signed_events(
             .values()
             .any(|v| v["status"] == "conflict_review")
     );
+    let receipt = &s.tasks.event_receipts["governance_test:gov-event"];
+    let expected_hash: String =
+        sqlx::query_scalar("SELECT encode(digest($1::bytea,'sha256'),'hex')")
+            .bind(&body)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    assert_eq!(receipt["payload_hash"], expected_hash);
+    assert_eq!(receipt["verification_result"], "signature_verified");
+    assert_eq!(receipt["request_id"], "gov-event");
     assert!(s.audit.iter().any(|v| v["request_id"] == "gov-download"));
     s.tasks.disabled_sources.push(source.into());
     s.users.get_mut("gov-admin").unwrap().roles.clear();
