@@ -31,18 +31,23 @@ miniapp-dev:
 DOCKER ?= docker
 API_IMAGE ?= crowd-api:local
 WEB_IMAGE ?= crowd-web:local
+DOCKER_BUILD_FLAGS ?=
 COMPOSE = $(DOCKER) compose --env-file .env -f compose.yaml -f compose.dev.yaml
 
-.PHONY: docker-build docker-build-api docker-build-web compose-config compose-build
+.PHONY: docker-build docker-build-api docker-build-web docker-build-fresh compose-config compose-build compose-build-fresh
 docker-build: docker-build-api docker-build-web
+docker-build-fresh:
+	$(MAKE) docker-build DOCKER_BUILD_FLAGS="--no-cache"
 docker-build-api:
-	$(DOCKER) build --pull -f backend/Dockerfile -t "$(API_IMAGE)" .
+	$(DOCKER) build --pull $(DOCKER_BUILD_FLAGS) -f backend/Dockerfile -t "$(API_IMAGE)" .
 docker-build-web:
-	$(DOCKER) build --pull -f frontend/Dockerfile -t "$(WEB_IMAGE)" .
+	$(DOCKER) build --pull $(DOCKER_BUILD_FLAGS) -f frontend/Dockerfile -t "$(WEB_IMAGE)" .
 compose-config:
 	$(COMPOSE) config --quiet
 compose-build:
 	$(COMPOSE) build --pull
+compose-build-fresh:
+	$(COMPOSE) build --pull --no-cache
 compose-up:
 	docker compose --env-file .env -f compose.yaml -f compose.dev.yaml up --build --wait
 compose-down:
