@@ -84,6 +84,32 @@ make compose-down
 
 `down` 保留数据库卷，不要用 `down --volumes` 处理已有业务数据。开发、测试、生产使用不同目录/项目名、数据库和凭据；使用 `-p crowd-dev` 等项目名后，所有后续命令须保持相同项目名。配置检查使用 `config --quiet`，完整 `config` 会输出插值后的敏感值。
 
+## 新代码签出后的重新编译与发布
+
+镜像构建使用当前工作目录的文件，不会自动拉取 Git 远端。先确认已签出预期提交，并检查未提交修改；未提交且未被忽略的文件也会进入构建。
+
+```bash
+git rev-parse HEAD
+git status --short
+make docker-build-fresh
+```
+
+`docker-build-fresh` 对 API/Web 都执行 `docker build --pull --no-cache`，强制重新运行容器内的编译步骤，无需提前在宿主机执行 Cargo 或 pnpm 构建。API 复制 backend 目录后执行 release 编译；Web 复制契约和 frontend 目录后，仅构建管理端的 TypeScript/Vite 产物。运行镜像只复制构建阶段产物。构建上下文排除本地 `target`、`dist`、`node_modules` 和 `*.tsbuildinfo`，不复用宿主机编译结果。
+
+普通 `make docker-build` 允许 Docker 层缓存；被复制的源码内容改变会使后续编译层失效，不需要每次禁用缓存。`--pull` 仅检查基础镜像更新，不代表禁用编译缓存。构建日志中的 `CACHED` 表示对应层输入未变；排查时用强制构建及 `--progress=plain` 查看完整日志。
+
+本地 Compose 在签出新代码后强制构建并替换容器：
+
+```bash
+make compose-config
+make compose-build-fresh
+docker compose --env-file .env -f compose.yaml -f compose.dev.yaml up --no-build -d --wait
+```
+
+这里 `--no-build` 使用上一条刚完成的镜像构建；构建失败时不要继续启动。单独执行 `docker compose up`、`restart` 或生产的 `up --no-build` 都不会编译新签出的源码。`make docker-build-fresh` 只制作镜像，也不会替换已经运行的容器。
+
+生产源码更新须按下一节用**新的唯一版本标签**重新构建、推送，再更新服务器 `.env` 的镜像标签/digest 并执行生产拉取和启动。生产服务器仅签出新代码而不重新制作/发布镜像，不会更新服务。离线环境则须重新导出、校验、导入新镜像，再更新运行配置。
+
 ## 发布镜像与离线交付
 
 使用实际 commit 对应的唯一版本号，避免覆盖已发布标签：
@@ -154,6 +180,8 @@ test -s crowd-backup.dump
 下载失败时使用 `docker build --progress=plain ...` 查看具体阶段：基础镜像拉取检查 Docker 仓库/DNS；APT 检查中科大源连通性；Cargo/npm 检查各自公共源。不要关闭 TLS 证书校验。就绪失败查看 API migration、数据库连接和数据库日志。
 
 2026-10-29：按本仓库配置核对构建上下文、镜像名称、端口、换源逻辑和命令。当前编辑环境未安装 Docker，未执行真实镜像构建、Compose 启动、镜像推送、离线导入或跨架构验证。这些操作须在具备 Docker 的隔离环境执行；容器就绪也不等于业务验收或官方到账验证。
+
+本次构建流程复查：已核对源码复制路径及 Make 强制构建命令，排除了本地 TypeScript 增量状态文件。当前环境仍无 Docker，尚未实测“修改源码 → 重建镜像 → 替换容器”的运行回归。
 
 ### 数据库分项连接配置验证（2026-10-29）
 
