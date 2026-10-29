@@ -179,6 +179,7 @@ export default defineConfig({
           {"text": "M20–M24 数字调整与客服风险操作", "link": "/runbooks/m20-m24"},
           {"text": "M25–M29 运行与验证", "link": "/runbooks/m25-m29"},
           {"text": "四方案交付与32项验收", "link": "/runbooks/m31-m35"},
+          {"text": "小程序兼容性修复与验证", "link": "/runbooks/miniapp-compatibility"},
           {"text": "状态、实体和页面能力追踪", "link": "/requirements/m31-m35"},
           {
             "text": "Web 管理端重构与验证",

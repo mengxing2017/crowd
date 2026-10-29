@@ -18,3 +18,5 @@
 
 - [状态、实体、能力与四方案交付追踪](/requirements/m31-m35)
 - [32项端到端映射与统一交付验证](/runbooks/m31-m35)
+
+- [微信小程序兼容性修复与验证](/runbooks/miniapp-compatibility)
