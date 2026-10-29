@@ -1,5 +1,10 @@
-export type Section = 'commissions' | 'withdrawalRules' | 'settlements' | 'welcome' | 'rules' | 'users' | 'promotions' | 'audit' | 'guide' | 'catalog' | 'attribution' | 'taskRules' | 'tasks'
+export type Section = 'campaigns' | 'adjustments' | 'support' | 'risk' | 'notifications' | 'commissions' | 'withdrawalRules' | 'settlements' | 'welcome' | 'rules' | 'users' | 'promotions' | 'audit' | 'guide' | 'catalog' | 'attribution' | 'taskRules' | 'tasks'
 export const sections: { key: Section; title: string; description: string; role?: string; roles?: string[] }[] = [
+  { key: 'campaigns', title: '活动计划与统计', description: '可选计划额度、业务统计与存量责任', roles: ['operator', 'auditor'] },
+  { key: 'adjustments', title: '任务撤销与数字调整', description: '依据登记、独立复核与在途争议', roles: ['settlement_reviewer', 'verifier', 'auditor'] },
+  { key: 'support', title: '客服工单与申诉', description: '分类咨询、转派升级与独立复核', roles: ['support', 'rule_manager'] },
+  { key: 'risk', title: '风险核查', description: '版本化规则、人工处置与误判解除', role: 'risk_manager' },
+  { key: 'notifications', title: '消息与岗位待办', description: '站内告知、受控目标与模板管理' },
   { key: 'welcome', title: '工作台', description: '从这里开始处理今天的平台业务' },
   { key: 'rules', title: '业务规则', description: '维护规则版本，保存草稿并按需发布', role: 'rule_manager' },
   { key: 'users', title: '用户与权限', description: '查询用户状态，配置岗位及数据范围', role: 'identity_reviewer' },

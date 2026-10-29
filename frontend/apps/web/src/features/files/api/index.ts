@@ -15,3 +15,8 @@ export async function uploadSettlementVoucher(file: File): Promise<string> {
  const response = await fetch(uploadPath('settlement_voucher'), { method: 'POST', headers: { ...authHeader(), 'Content-Type': 'application/octet-stream' }, body: file })
  return decodeUpload(await response.json()).id
 }
+
+export async function uploadSupportAttachment(file: File): Promise<string> {
+ const response = await fetch(uploadPath('support_attachment'), { method: 'POST', headers: { ...authHeader(), 'Content-Type': 'application/octet-stream' }, body: file })
+ return decodeUpload(await response.json()).id
+}
