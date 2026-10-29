@@ -13,7 +13,7 @@ hero:
       link: /runbooks/
 features:
   - title: 需求可追踪
-    details: M01–M16 分阶段追踪需求、实现、依赖与验证证据。
+    details: M01–M24 分阶段追踪需求、实现、依赖与验证证据。
     link: /requirements/
   - title: 领域有边界
     details: 后端、API 契约与前端按领域组织，记录兼容协议与事务决策。

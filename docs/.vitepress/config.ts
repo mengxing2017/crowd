@@ -78,7 +78,8 @@ export default defineConfig({
             "text": "M13–M16 实现与验证追踪",
             "link": "/requirements/m13-m16"
           },
-          {"text": "M17–M19 收款资料与人工登记追踪", "link": "/requirements/m17-m19"}
+          {"text": "M17–M19 收款资料与人工登记追踪", "link": "/requirements/m17-m19"},
+          {"text": "M20–M24 数字调整与用户服务", "link": "/requirements/m20-m24"}
         ]
       },
       {
@@ -134,6 +135,7 @@ export default defineConfig({
             "link": "/adr/0011-commission-withdrawal-manual-settlement"
           },
           {"text": "ADR 0012：收款资料确认与人工异常处理", "link": "/adr/0012-receipt-management-manual-exceptions"},
+          {"text": "ADR 0015：运营领域与用户告知事务", "link": "/adr/0015-operations-domain-workflows"},
           {"text": "ADR 0013：领域依赖隔离", "link": "/adr/0013-domain-north-south-ports"},
           {"text": "ADR 0014：领域入口与实际事件处理", "link": "/adr/0014-domain-public-entrypoints"}
         ]
@@ -171,6 +173,7 @@ export default defineConfig({
             "link": "/runbooks/m13-m16"
           },
           {"text": "M17–M19 收款资料与人工异常运行手册", "link": "/runbooks/m17-m19"},
+          {"text": "M20–M24 数字调整与客服风险操作", "link": "/runbooks/m20-m24"},
           {
             "text": "Web 管理端重构与验证",
             "link": "/runbooks/web-console"

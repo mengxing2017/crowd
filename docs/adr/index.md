@@ -18,3 +18,4 @@
 - [ADR 0013：domain、north 的领域依赖隔离](/adr/0013-domain-north-south-ports)
 
 - [ADR 0014：领域公开入口与实际事件处理](/adr/0014-domain-public-entrypoints)
+- [ADR 0015：运营领域与用户告知事务边界](/adr/0015-operations-domain-workflows)
