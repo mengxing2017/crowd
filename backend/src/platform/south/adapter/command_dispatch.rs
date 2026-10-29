@@ -24,7 +24,17 @@ pub(crate) async fn apply(
         crate::receipts::south::port::services::cleanup(tx, state, context).await?
     } else if action == "receipt_reveal" {
         crate::receipts::south::port::services::reveal(state, actor, input, request, now)?
-    } else if crate::commissions::south::port::rules::is_command(action) {
+    } else if crate::campaigns::south::port::rules::is_command(action) {
+        crate::campaigns::south::port::services::apply(state, context)?
+    } else if crate::notifications::south::port::rules::is_command(action) {
+        crate::notifications::south::port::services::apply(state, context)?
+    } else if crate::risk::south::port::rules::is_command(action) {
+        crate::risk::south::port::services::apply(state, context)?
+    } else if crate::support::south::port::rules::tickets::is_command(action) {
+        crate::support::south::port::services::apply(state, context)?
+    } else if crate::commissions::south::port::rules::is_command(action)
+        || crate::commissions::south::port::rules::adjustments::is_command(action)
+    {
         crate::commissions::south::port::services::apply(state, context)?
     } else if crate::withdrawals::south::port::rules::is_command(action) {
         if matches!(action, "withdrawal_preview" | "withdrawal_apply") {

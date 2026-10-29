@@ -90,6 +90,7 @@ impl ExecuteCommand {
             }
         }
         let before = state.clone();
+        let checkpoint = crate::platform::south::port::workflows::checkpoint(&state);
         let context = crate::shared::CommandContext {
             actor: &actor,
             action,
@@ -99,9 +100,17 @@ impl ExecuteCommand {
             now: &now,
             epoch,
         };
-        let result = crate::platform::south::port::command_dispatch::apply(
-            &mut tx, &mut state, token, &context,
-        )
+        let result: Result<Value> = async {
+            crate::platform::south::port::workflows::before(&state, &actor, action, input, epoch)?;
+            let value = crate::platform::south::port::command_dispatch::apply(
+                &mut tx, &mut state, token, &context,
+            )
+            .await?;
+            crate::platform::south::port::workflows::after(
+                &mut state, action, &value, epoch, checkpoint, request,
+            )?;
+            Ok(value)
+        }
         .await;
         let result = match result {
             Ok(value) => value,

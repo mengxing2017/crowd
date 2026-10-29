@@ -5,6 +5,12 @@ use axum::{
 };
 pub fn routes() -> Router<Application> {
     Router::new()
+        .merge(super::adjustment_locate::routes())
+        .merge(super::adjustment_propose::routes())
+        .merge(super::adjustment_review::routes())
+        .merge(super::adjustment_batch_preview::routes())
+        .merge(super::adjustment_batch_review::routes())
+        .merge(super::adjustments::routes())
         .route(
             "/api/v1/community/read/commission_source",
             get(super::commission_source::handle),

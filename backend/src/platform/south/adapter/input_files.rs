@@ -15,5 +15,19 @@ pub(crate) async fn validate(
         tx, state, actor, action, input,
     )
     .await?;
+    if action == "ticket_reply" {
+        for id in input["attachments"].as_array().into_iter().flatten() {
+            let id = id
+                .as_str()
+                .ok_or(crate::shared::Failure("INVALID_INPUT", "附件编号无效"))?;
+            crate::platform::south::adapter::postgres::Repository::validate_file(
+                tx,
+                id,
+                actor,
+                "support_attachment",
+            )
+            .await?;
+        }
+    }
     Ok(())
 }

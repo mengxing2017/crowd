@@ -16,6 +16,15 @@ impl Repository {
         }
         Ok(())
     }
+    pub async fn fingerprint(tx: &mut Transaction<'_, Postgres>, id: &str) -> Result<String> {
+        sqlx::query_scalar(
+            "SELECT encode(digest(content,'sha256'),'hex') FROM crowd_files WHERE id=$1",
+        )
+        .bind(id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(database)
+    }
     pub async fn validate_file(
         tx: &mut Transaction<'_, Postgres>,
         id: &str,
@@ -49,6 +58,7 @@ impl Repository {
             "product_image",
             "task_evidence",
             "settlement_voucher",
+            "support_attachment",
         ]
         .contains(&purpose)
         {

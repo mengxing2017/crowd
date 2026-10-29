@@ -20,7 +20,8 @@ impl ReconcileCatalog {
         let revision = state.catalog.revision;
         state.reconcile_lifecycle(now);
         let expired = state.expire_tasks(now);
-        if revision != state.catalog.revision || expired > 0 {
+        let notices_changed = crate::catalog::south::port::reconcile_user_notices(&mut state, now);
+        if revision != state.catalog.revision || expired > 0 || notices_changed {
             let time = Repository::time(&mut tx).await?;
             state.log(
                 "catalog-worker",

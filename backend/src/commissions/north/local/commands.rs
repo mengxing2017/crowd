@@ -7,14 +7,25 @@ pub(crate) fn apply<P: DomainPort + ?Sized>(
     c: &CommandContext<'_>,
 ) -> Result<Value> {
     let previous_entries = state.commissions().entries.len();
-    let result = crate::commissions::domain::command(
-        state,
-        c.actor,
-        c.action,
-        c.input,
-        c.generated,
-        c.epoch,
-    )?;
+    let result = if crate::commissions::domain::adjustments::is_command(c.action) {
+        crate::commissions::domain::adjustments::command(
+            state,
+            c.actor,
+            c.action,
+            c.input,
+            c.generated,
+            c.epoch,
+        )?
+    } else {
+        crate::commissions::domain::command(
+            state,
+            c.actor,
+            c.action,
+            c.input,
+            c.generated,
+            c.epoch,
+        )?
+    };
     for entry in state
         .commissions_mut()
         .entries

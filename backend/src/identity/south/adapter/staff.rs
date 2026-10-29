@@ -61,6 +61,8 @@ impl Repository {
             "product_reviewer",
             "product_emergency",
             "attribution_reviewer",
+            "support",
+            "risk_manager",
         ]
         .map(str::to_owned)
         .to_vec();

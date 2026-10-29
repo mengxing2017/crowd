@@ -9,3 +9,11 @@ mod commission_entries;
 mod commission_proposals;
 mod commission_source;
 mod commission_summary;
+
+mod adjustment_batch_preview;
+mod adjustment_batch_review;
+mod adjustment_propose;
+mod adjustment_review;
+mod adjustments;
+
+mod adjustment_locate;

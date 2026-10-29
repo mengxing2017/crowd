@@ -50,3 +50,7 @@ extern crate self as crowd_api;
 #[cfg(test)]
 #[path = "../tests/mod.rs"]
 mod validation_tests;
+
+pub mod campaigns;
+pub mod notifications;
+pub mod risk;

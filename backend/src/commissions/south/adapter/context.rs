@@ -1,6 +1,13 @@
 use crate::commissions::south::port::DomainPort;
 use crate::platform::south::port::State;
 impl DomainPort for State {
+    fn cancel_task(&mut self, id: &str, a: &str, now: i64) -> crate::shared::Result<()> {
+        crate::tasks::south::port::cancel_pending(self, id, a, now)
+    }
+    fn pause_application(&mut self, id: &str, a: &str, now: i64) -> crate::shared::Result<()> {
+        crate::withdrawals::south::port::pause_for_adjustment(self, id, a, now)
+    }
+
     fn commissions(&self) -> &crate::commissions::domain::Commissions {
         &self.commissions
     }

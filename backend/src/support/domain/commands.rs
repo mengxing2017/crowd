@@ -22,8 +22,10 @@ pub(crate) fn command<P: DomainPort + ?Sized>(
                 return Err(Failure("FORBIDDEN", "数字记录不存在或不属于本人"));
             }
             if let Some(id) = input["application_id"].as_str().filter(|v| !v.is_empty())
-                && state.withdrawals_applications().contains_key(id)
-                && state.withdrawals_applications()[id]["owner"] != actor
+                && state
+                    .withdrawals_applications()
+                    .get(id)
+                    .is_none_or(|app| app["owner"] != actor)
             {
                 return Err(Failure("FORBIDDEN", "申请不属于本人"));
             }

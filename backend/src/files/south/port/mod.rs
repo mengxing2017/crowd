@@ -9,3 +9,5 @@ pub use access::FileAccess;
 
 pub(crate) mod rules;
 pub(crate) mod services;
+
+pub(crate) use super::adapter::{retain_fingerprint, support_file_owner};

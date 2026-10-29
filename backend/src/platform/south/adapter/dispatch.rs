@@ -44,6 +44,24 @@ impl State {
         })
     }
     pub fn check_command_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
+        self.user(actor)?;
+        if crate::campaigns::south::port::rules::is_command(action) {
+            return crate::campaigns::south::port::rules::access(self, actor, action, input);
+        }
+        if crate::notifications::south::port::rules::is_command(action) {
+            return crate::notifications::south::port::rules::access(self, actor, action, input);
+        }
+        if crate::risk::south::port::rules::is_command(action) {
+            return crate::risk::south::port::rules::access(self, actor, action, input);
+        }
+        if crate::support::south::port::rules::tickets::is_command(action) {
+            return crate::support::south::port::rules::tickets::access(self, actor, action, input);
+        }
+        if crate::commissions::south::port::rules::adjustments::is_command(action) {
+            return crate::commissions::south::port::rules::adjustments::access(
+                self, actor, action, input,
+            );
+        }
         if crate::commissions::south::port::rules::is_command(action) {
             return crate::commissions::south::port::rules::access(self, actor, action, input);
         }

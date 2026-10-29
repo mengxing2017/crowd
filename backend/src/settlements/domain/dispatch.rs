@@ -67,6 +67,15 @@ pub fn command<P: DomainPort + ?Sized>(
         .cloned()
         .ok_or(Failure("NOT_FOUND", "申请不存在"))?;
     version(&app, i)?;
+    if matches!(
+        a,
+        "settlement_claim" | "settlement_register" | "settlement_verify"
+    ) {
+        require(
+            app["adjustment_review_required"] != true,
+            "任务数字调整核查中，不可继续付款或登记结算",
+        )?;
+    }
     text(i, "reason")?;
     require(app["owner"] != actor, "不得审核、经办或复核本人申请")?;
     match a {

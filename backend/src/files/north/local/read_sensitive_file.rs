@@ -33,8 +33,11 @@ impl ReadSensitiveFile {
                 .execute(token, id, reason, request)
                 .await;
         }
-        let mut owner = None;
+        let mut owner = crate::files::south::port::support_file_owner(&state, &actor, id)?;
         for a in state.settlement_applications().values() {
+            if owner.is_some() {
+                break;
+            }
             let receipt = a["receipt_snapshot"]["file_id"] == id;
             let voucher = a["registration"]["voucher_file_id"] == id;
             if !receipt && !voucher {

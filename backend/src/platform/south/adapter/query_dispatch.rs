@@ -10,6 +10,49 @@ pub(crate) fn read(
     now: &str,
     epoch: i64,
 ) -> Result<Value> {
+    crate::notifications::south::port::rules::sync(state, epoch);
+    if crate::campaigns::south::port::rules::is_read(section) {
+        return crate::campaigns::south::port::rules::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+            epoch,
+        );
+    }
+    if crate::notifications::south::port::rules::is_read(section) {
+        return crate::notifications::south::port::rules::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+            epoch,
+        );
+    }
+    if crate::risk::south::port::rules::is_read(section) {
+        return crate::risk::south::port::rules::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+            epoch,
+        );
+    }
+    if crate::support::south::port::rules::tickets::is_read(section) {
+        return crate::support::south::port::rules::tickets::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+        );
+    }
+    if section == "adjustments" {
+        return crate::commissions::south::port::rules::adjustments::read(
+            state,
+            actor,
+            target.unwrap_or(actor),
+        );
+    }
     if matches!(
         section,
         "commission_source"

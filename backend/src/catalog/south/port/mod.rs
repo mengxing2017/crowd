@@ -12,3 +12,5 @@ pub(crate) use crate::audit::south::port::AuditWriter;
 
 pub(crate) mod rules;
 pub(crate) mod services;
+
+pub(crate) use super::adapter::reconcile_user_notices;

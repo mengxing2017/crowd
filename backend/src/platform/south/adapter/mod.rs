@@ -2,6 +2,7 @@ pub mod postgres;
 
 mod dispatch;
 mod state;
+pub(crate) mod workflows;
 pub use state::State;
 
 mod compatibility;

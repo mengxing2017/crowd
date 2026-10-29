@@ -52,6 +52,7 @@ pub(crate) fn command<P: DomainPort + ?Sized>(
                         "manual_handler",
                         "verifier",
                         "support",
+                        "risk_manager",
                     ]
                     .contains(&r.as_str())
                 }) {

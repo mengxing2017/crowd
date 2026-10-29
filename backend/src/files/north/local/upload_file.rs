@@ -55,6 +55,11 @@ impl UploadFile {
             result["id"].as_str().unwrap(),
             size,
         );
+        if purpose == "wechat_receipt" {
+            let id = result["id"].as_str().unwrap_or("");
+            let fingerprint = Repository::fingerprint(&mut tx, id).await?;
+            crate::files::south::port::retain_fingerprint(&mut state, id, fingerprint);
+        }
         let now = Repository::time(&mut tx).await?;
         state.log(
             &actor,

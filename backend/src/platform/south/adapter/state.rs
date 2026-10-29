@@ -6,6 +6,12 @@ use std::collections::BTreeMap;
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct State {
     #[serde(default)]
+    pub campaigns: crate::campaigns::south::port::rules::Campaigns,
+    #[serde(default)]
+    pub notifications: crate::notifications::south::port::rules::Notifications,
+    #[serde(default)]
+    pub risk: crate::risk::south::port::rules::Risk,
+    #[serde(default)]
     pub commissions: crate::commissions::south::port::rules::Commissions,
     #[serde(default)]
     pub withdrawals: crate::withdrawals::south::port::rules::Withdrawals,

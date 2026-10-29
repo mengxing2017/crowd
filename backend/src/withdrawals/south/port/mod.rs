@@ -8,3 +8,7 @@ pub(crate) use super::adapter::commission_summary;
 
 pub(crate) mod rules;
 pub(crate) mod services;
+
+pub(crate) use crate::withdrawals::south::adapter::adjustments::pause_for_adjustment;
+
+pub(crate) use crate::withdrawals::south::adapter::adjustments::resume_after_dispute;

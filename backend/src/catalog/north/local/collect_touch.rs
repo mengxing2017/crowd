@@ -30,6 +30,7 @@ impl CollectTouch {
             .insert(idempotency, json!({"input":input,"result":value}));
         let time = Repository::time(&mut tx).await?;
         state.log("guest", "REQ-05-001", "visit", request, &time);
+        crate::catalog::south::port::reconcile_user_notices(&mut state, now);
         Repository::save(&mut tx, &state).await?;
         Repository::commit(tx).await?;
         Ok(value)
