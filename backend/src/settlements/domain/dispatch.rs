@@ -56,6 +56,7 @@ pub fn command<P: DomainPort + ?Sized>(
     id: &str,
     now: i64,
 ) -> Result<Value> {
+    crate::shared::validate_manual_boundary(i)?;
     access(s, actor, a, i)?;
     if a.starts_with("settlement_batch_") {
         return super::review::batch(s, actor, a, i, id, now);
@@ -87,15 +88,19 @@ pub fn command<P: DomainPort + ?Sized>(
         | "settlement_handoff_accept"
         | "settlement_exception"
         | "settlement_unknown"
-        | "settlement_confirm_unpaid" => super::handling::handle(s, &mut app, actor, a, i, now)?,
+        | "settlement_confirm_unpaid" => {
+            super::handling::handle(s, &mut app, actor, a, i, now, id)?
+        }
         _ => super::registration::register(s, &mut app, actor, a, i, id, now)?,
     }
     app["version"] = json!(app["version"].as_u64().unwrap_or(0) + 1);
     app["updated_at"] = json!(now);
     let event_version = app["version"].clone();
     let exception = app["exception"].clone();
+    let handoff = app["handoff"].clone();
+    let handling_id = app["handling"]["id"].clone();
     app["events"].as_array_mut().unwrap().push(
-        json!({"action":a,"actor":actor,"at":now,"reason":i["reason"],"version":event_version,"exception":exception}),
+        json!({"action":a,"actor":actor,"at":now,"reason":i["reason"],"id":id,"request_id":key,"handling_id":handling_id,"handoff":handoff,"version":event_version,"exception":exception}),
     );
     s.save_withdrawal_application(key, app.clone());
     s.read_withdrawal(actor, "withdrawal_detail", key, now)

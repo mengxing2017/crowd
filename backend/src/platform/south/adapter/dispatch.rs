@@ -44,6 +44,7 @@ impl State {
         })
     }
     pub fn check_command_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
+        crate::shared::validate_manual_boundary(input)?;
         if self.user(actor)?.status != "active" && action != "logout" {
             return Err(Failure("ACCOUNT_RESTRICTED", "账号已停用，请联系客服申诉"));
         }

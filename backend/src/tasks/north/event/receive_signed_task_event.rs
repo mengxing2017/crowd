@@ -31,6 +31,12 @@ impl ReceiveSignedTaskEvent {
                 "base_cents",
             ],
         )?;
+        let payload_hash = crate::tasks::south::port::event_payload_hash(&mut tx, body).await?;
+        let base = if input["base_cents"].is_null() {
+            None
+        } else {
+            Some(number(&input, "base_cents")?)
+        };
         let received = crate::tasks::south::port::event_received_at(&mut tx).await?;
         let sent = number(&input, "sent_at")?;
         // A source must explicitly publish its transport acceptance window in deployment configuration.
@@ -55,13 +61,12 @@ impl ReceiveSignedTaskEvent {
                 .is_some_and(|t| t["template"]["external_source"] == source),
             "来源与任务固定模板不匹配",
         )?;
-        let value =
-            s.record_task_result(source, event, claim, occurred, input["base_cents"].as_i64());
+        let value = s.record_task_result(source, event, claim, occurred, base);
         let now = Repository::time(&mut tx).await?;
         match value {
             Ok(v) => {
                 let key = format!("{source}:{event}");
-                s.tasks.event_receipts.entry(key).or_insert(json!({"source":source,"event_id":event,"claim_id":claim,"occurred_at":occurred,"received_at":received,"request_id":request}));
+                s.tasks.event_receipts.entry(key.clone()).or_insert(json!({"id":key,"payload_hash":payload_hash,"verification_result":"signature_verified","source":source,"event_id":event,"claim_id":claim,"occurred_at":occurred,"received_at":received,"request_id":request}));
                 s.log(source, "signed_task_event", claim, request, &now);
                 Repository::save(&mut tx, &s).await?;
                 Repository::commit(tx).await?;
@@ -70,7 +75,7 @@ impl ReceiveSignedTaskEvent {
             Err(e) => {
                 if e.0 == "IDEMPOTENCY_CONFLICT" {
                     let key = format!("{source}:{event}:{request}");
-                    s.tasks.event_receipts.insert(key,json!({"source":source,"event_id":event,"claim_id":claim,"occurred_at":occurred,"received_at":received,"status":"conflict_review","request_id":request}));
+                    s.tasks.event_receipts.insert(key.clone(),json!({"id":key,"payload_hash":payload_hash,"verification_result":"signature_verified","source":source,"event_id":event,"claim_id":claim,"occurred_at":occurred,"received_at":received,"status":"conflict_review","request_id":request}));
                 }
                 s.log_failure(source, "signed_task_event", claim, request, &now, e.0);
                 Repository::save(&mut tx, &s).await?;

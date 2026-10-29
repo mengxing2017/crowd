@@ -11,6 +11,7 @@ pub(super) fn handle<P: DomainPort + ?Sized>(
     a: &str,
     i: &Value,
     now: i64,
+    id: &str,
 ) -> Result<()> {
     if a == "settlement_claim" {
         require(
@@ -29,6 +30,8 @@ pub(super) fn handle<P: DomainPort + ?Sized>(
         }
         app["handler"] = json!(actor);
         app["claimed_at"] = json!(now);
+        app["handling"] =
+            json!({"id":id,"request_id":app["id"],"started_by":actor,"started_at":now});
         app["status"] = json!("processing");
         return Ok(());
     }
@@ -48,6 +51,9 @@ pub(super) fn handle<P: DomainPort + ?Sized>(
             )?;
         }
         app["handler"] = json!(actor);
+        if app["status"] == "unknown" {
+            app["uncertainty_assignee"] = json!(actor);
+        }
         app["handoff"]["status"] = json!("accepted");
         app["handoff"]["accepted_at"] = json!(now);
         return Ok(());
@@ -70,6 +76,7 @@ pub(super) fn handle<P: DomainPort + ?Sized>(
             )?;
             app["handoff"] = json!({"from":actor,"to":to,"at":now,"reason":i["reason"],"paid_status":paid,"status":"pending"});
             if paid != "unpaid" {
+                app["uncertainty_assignee"] = json!(actor);
                 app["status"] = json!("unknown");
             }
         }
@@ -100,6 +107,11 @@ pub(super) fn handle<P: DomainPort + ?Sized>(
             app["uncertainty_reason"] = i["reason"].clone();
         }
         "settlement_unknown" => {
+            require(
+                app["handoff"]["status"] != "pending",
+                "交接期间须先完成交接",
+            )?;
+            app["uncertainty_assignee"] = json!(actor);
             app["status"] = json!("unknown");
             app["uncertainty_reason"] = i["reason"].clone();
         }
@@ -115,6 +127,8 @@ pub(super) fn handle<P: DomainPort + ?Sized>(
                 "已有付款登记须先独立核查，不能直接释放",
             )?;
             s.release_withdrawal(app, "rejected", actor, text(i, "reason")?, now)?;
+            // Keep the published status while distinguishing a confirmed unpaid return.
+            app["resolution"] = json!("returned_unpaid");
         }
         _ => unreachable!(),
     }

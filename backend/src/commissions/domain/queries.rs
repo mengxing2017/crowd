@@ -4,6 +4,8 @@ use crate::shared::{Failure, Result};
 use serde_json::{Value, json};
 pub fn summary<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<Value> {
     let mut confirmed = 0_i128;
+    let mut gross_confirmed = 0_i128;
+    let mut adjustment = 0_i128;
     let mut held = 0_i128;
     let mut settled = 0_i128;
     let mut disputed = 0_i128;
@@ -22,8 +24,18 @@ pub fn summary<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<Value> {
                 .ok_or(Failure("LEDGER_INCONSISTENT", "流水金额无效，请核查"))?,
         );
         match e["kind"].as_str().unwrap_or("") {
-            "confirmed" | "increase" => confirmed += n,
-            "decrease" => confirmed -= n,
+            "confirmed" => {
+                confirmed += n;
+                gross_confirmed += n;
+            }
+            "increase" => {
+                confirmed += n;
+                adjustment += n;
+            }
+            "decrease" => {
+                confirmed -= n;
+                adjustment -= n;
+            }
             "hold" => held += n,
             "release" => held -= n,
             "settled" => {
@@ -46,9 +58,18 @@ pub fn summary<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<Value> {
     }
     let available = confirmed - held - settled - disputed;
     require(
-        [confirmed, held, settled, disputed, pending, available]
-            .iter()
-            .all(|n| n.abs() <= i128::from(MAX)),
+        [
+            confirmed,
+            gross_confirmed,
+            adjustment,
+            held,
+            settled,
+            disputed,
+            pending,
+            available,
+        ]
+        .iter()
+        .all(|n| n.abs() <= i128::from(MAX)),
         "汇总超出安全整数范围",
     )?;
     let applications: i128 = s
@@ -77,12 +98,26 @@ pub fn summary<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<Value> {
         .filter(|a| a["owner"] == owner)
         .all(|a| {
             let id = a["id"].as_str().unwrap_or("");
+            let mut original = 0_i128;
+            let mut consumed = 0_i128;
+            let mut hold_count = 0_u64;
+            let mut valid_amounts = true;
             let held = s
                 .commissions()
                 .entries
                 .iter()
                 .filter(|e| e["owner"] == owner && e["source"] == id)
                 .fold(0_i128, |n, e| {
+                    let amount = i128::from(e["amount_cents"].as_i64().unwrap_or(-1));
+                    valid_amounts &= amount >= 0;
+                    match e["kind"].as_str() {
+                        Some("hold") => {
+                            original += amount;
+                            hold_count += 1;
+                        }
+                        Some("release" | "settled") => consumed += amount,
+                        _ => {}
+                    }
                     n + match e["kind"].as_str() {
                         Some("hold") => i128::from(e["amount_cents"].as_i64().unwrap_or(0)),
                         Some("release" | "settled") => {
@@ -91,14 +126,19 @@ pub fn summary<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<Value> {
                         _ => 0,
                     }
                 });
-            held == if matches!(
-                a["status"].as_str(),
-                Some("rejected" | "cancelled" | "settled")
-            ) {
-                0
-            } else {
-                i128::from(a["amount_cents"].as_i64().unwrap_or(0))
-            }
+            valid_amounts
+                && hold_count == 1
+                && original == i128::from(a["amount_cents"].as_i64().unwrap_or(0))
+                && consumed <= original
+                && held
+                    == if matches!(
+                        a["status"].as_str(),
+                        Some("rejected" | "cancelled" | "settled")
+                    ) {
+                        0
+                    } else {
+                        i128::from(a["amount_cents"].as_i64().unwrap_or(0))
+                    }
         });
     let consistent = valid_holds
         && valid_sources
@@ -109,7 +149,7 @@ pub fn summary<P: DomainPort + ?Sized>(s: &P, owner: &str) -> Result<Value> {
         && disputed >= 0
         && applications == held;
     Ok(
-        json!({"owner":owner,"currency":"CNY","version":version,"pending_cents":pending as i64,"confirmed_cents":confirmed as i64,"available_cents":available as i64,"held_cents":held as i64,"disputed_cents":disputed as i64,"settled_cents":settled as i64,"consistent":consistent,"notice":"仅为平台佣金标记数字，非存款余额；付款由人员线下处理"}),
+        json!({"owner":owner,"currency":"CNY","version":version,"pending_cents":pending as i64,"confirmed_cents":confirmed as i64,"gross_confirmed_cents":gross_confirmed as i64,"adjustment_cents":adjustment as i64,"available_cents":available as i64,"held_cents":held as i64,"disputed_cents":disputed as i64,"settled_cents":settled as i64,"consistent":consistent,"notice":"仅为平台佣金标记数字，非存款余额；付款由人员线下处理"}),
     )
 }
 pub fn read<P: DomainPort + ?Sized>(

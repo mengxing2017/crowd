@@ -72,7 +72,7 @@ pub(super) fn register<P: DomainPort + ?Sized>(
             if !i["reference_note"].is_null() {
                 text(i, "reference_note")?;
             }
-            app["registration"] = json!({"id":id,"actor":actor,"amount_cents":n,"method":app["receipt_snapshot"]["method"],"receipt_id":app["receipt_snapshot"]["id"],"paid_at":paid,"recorded_at":now,"voucher_file_id":voucher,"voucher_owner":actor,"result":"reported_paid","reason":i["reason"],"reference_note":i["reference_note"],"official_verified":false});
+            app["registration"] = json!({"id":id,"request_id":app["id"],"handling_id":app["handling"]["id"],"actor":actor,"amount_cents":n,"method":app["receipt_snapshot"]["method"],"receipt_id":app["receipt_snapshot"]["id"],"paid_at":paid,"recorded_at":now,"voucher_file_id":voucher,"voucher_owner":actor,"result":"reported_paid","reason":i["reason"],"reference_note":i["reference_note"],"official_verified":false});
             if s.commission_source_disputed(app)
                 || i["voucher_matches"] != true
                 || n != cents(app, "amount_cents")?

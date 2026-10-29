@@ -41,3 +41,14 @@ pub(crate) use crate::tasks::north::event::ReceiveSignedTaskEvent;
 pub(crate) async fn received_at(tx: &mut Transaction<'_, Postgres>) -> Result<i64> {
     Repository::epoch(tx).await
 }
+
+pub(crate) async fn payload_hash(
+    tx: &mut Transaction<'_, Postgres>,
+    body: &[u8],
+) -> Result<String> {
+    sqlx::query_scalar("SELECT encode(digest($1::bytea,'sha256'),'hex')")
+        .bind(body)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(database)
+}

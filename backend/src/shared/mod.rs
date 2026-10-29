@@ -1,5 +1,6 @@
 mod validation;
 pub use validation::validate_fields;
+pub(crate) use validation::validate_manual_boundary;
 pub use validation::{Failure, Result, check_version, display_cents, invalid, text};
 
 mod numbers;

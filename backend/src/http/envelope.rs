@@ -30,6 +30,11 @@ pub(crate) fn response_with_details(
     let (status, value) = match result {
         Ok(v) => (StatusCode::OK, json!({"data":v,"request_id":request})),
         Err(Failure(code, message)) => {
+            let business_code = match code {
+                "INSUFFICIENT_AVAILABLE" => "MARKER_AMOUNT_INSUFFICIENT",
+                "RECEIPT_INVALID" => "RECEIPT_MATERIAL_REQUIRED",
+                _ => code,
+            };
             let status = match code {
                 "SESSION_EXPIRED" | "AUTH_INVALID" => StatusCode::UNAUTHORIZED,
                 "FORBIDDEN" => StatusCode::FORBIDDEN,
@@ -43,7 +48,7 @@ pub(crate) fn response_with_details(
             };
             (
                 status,
-                json!({"error":{"code":code,"message":message,"request_id":request,"details":details}}),
+                json!({"error":{"code":code,"business_code":business_code,"message":message,"request_id":request,"details":details}}),
             )
         }
     };

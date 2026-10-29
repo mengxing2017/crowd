@@ -37,3 +37,35 @@ pub fn validate_fields(input: &Value, fields: &[&str]) -> Result<()> {
     }
     Ok(())
 }
+
+/// Server-owned payment verification flags cannot be supplied by a command client.
+pub(crate) fn validate_manual_boundary(input: &Value) -> Result<()> {
+    match input {
+        Value::Object(object) => {
+            if object.keys().any(|key| {
+                matches!(
+                    key.as_str(),
+                    "official_verified"
+                        | "external_payment"
+                        | "gateway_response"
+                        | "payment_verified"
+                )
+            }) {
+                return Err(Failure(
+                    "INVALID_INPUT",
+                    "不接受官方到账验证或支付接口结果字段",
+                ));
+            }
+            for value in object.values() {
+                validate_manual_boundary(value)?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                validate_manual_boundary(value)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}

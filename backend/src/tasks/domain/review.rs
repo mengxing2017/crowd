@@ -182,7 +182,7 @@ pub trait ReviewRules: DomainPort {
                     _ => return Err(invalid("审核结论错误")),
                 }
                 let submission = t["receipt"]["id"].clone();
-                t["decisions"].as_array_mut().unwrap().push(json!({"actor":actor,"at":now,"decision":decision,"reason":input["reason"],"reason_code":input["reason_code"],"submission_id":submission,"checklist_confirmed":input["checklist_confirmed"]}));
+                t["decisions"].as_array_mut().unwrap().push(json!({"id":format!("{generated}:{id}"),"task_id":id,"actor":actor,"at":now,"decision":decision,"reason":input["reason"],"reason_code":input["reason_code"],"submission_id":submission,"checklist_confirmed":input["checklist_confirmed"]}));
             }
             "review_verify" => {
                 require(
@@ -200,7 +200,8 @@ pub trait ReviewRules: DomainPort {
                     t["status"] = json!("submitted");
                     t["reviewer"] = Value::Null;
                 }
-                t["decisions"].as_array_mut().unwrap().push(json!({"actor":actor,"at":now,"decision":"verification","approve":input["approve"],"reason":input["reason"]}));
+                let submission = t["receipt"]["id"].clone();
+                t["decisions"].as_array_mut().unwrap().push(json!({"id":format!("{generated}:{id}"),"task_id":id,"submission_id":submission,"actor":actor,"at":now,"decision":"verification","approve":input["approve"],"reason":input["reason"]}));
             }
             "task_repair_propose" | "review_revoke_propose" => {
                 text(input, "reason")?;
