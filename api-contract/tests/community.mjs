@@ -10,7 +10,7 @@ assert.ok(entry.statements.length > 0 && entry.statements.every(statement => ts.
 const output = await mkdtemp(join(tmpdir(), 'crowd-community-contract-'))
 let community
 let domains
-const domainNames = ['campaigns', 'notifications', 'risk', 'commissions', 'withdrawals', 'settlements', 'identity', 'catalog', 'attribution', 'tasks', 'governance', 'receipts', 'promotion', 'audit', 'support', 'files', 'platform', 'common', 'system']
+const domainNames = ['reporting', 'privacy', 'campaigns', 'notifications', 'risk', 'commissions', 'withdrawals', 'settlements', 'identity', 'catalog', 'attribution', 'tasks', 'governance', 'receipts', 'promotion', 'audit', 'support', 'files', 'platform', 'common', 'system']
 try {
   const program = ts.createProgram(['community', ...domainNames].map(domain => fileURLToPath(new URL(`../src/modules/${domain}/index.ts`, import.meta.url))), {
     target: ts.ScriptTarget.ES2022,
@@ -303,3 +303,28 @@ assert.deepEqual(await domains.campaigns.createCampaigns(capture(operationsFixtu
 assert.deepEqual(await domains.notifications.createNotifications(capture(operationsFixture.messages)).messages(), operationsFixture.messages)
 assert.deepEqual(await domains.support.createSupport(capture(operationsFixture.tickets)).tickets(), operationsFixture.tickets)
 console.log('M20–M24: owned operation clients, original retry keys, safe integers and shared Rust workflow fixture passed')
+
+// M25–M29 owned clients must preserve request keys, scope encoding and safe integers.
+for (const [domain, factory, methods] of [
+ ['reporting', 'createReporting', ['reportCreate', 'exportRequest', 'reconciliationRun', 'differenceAssign', 'differenceClose', 'voucherCheck']],
+ ['privacy', 'createPrivacy', ['privacyPolicyPublish', 'privacyCopyRequest', 'privacyCloseRequest', 'privacyCloseReview', 'privacyRepairPreview', 'privacyRepairReview']],
+]) {
+ const client = domains[domain][factory](capture({ id: 'result', version: 1 }))
+ for (const method of methods) {
+  const body = { id: 'original', version: 1, reason: 'contract' }
+  await client[method](body, 'm25-original-key')
+  assert.equal(request.path, `/api/v1/community/commands/${method.replace(/[A-Z]/g, s => `_${s.toLowerCase()}`)}`)
+  assert.equal(request.key, 'm25-original-key')
+  assert.deepEqual(request.body, body)
+ }
+ await assert.rejects(domains[domain][factory](capture({ id: 'unsafe', amount_cents: 1.5 }))[methods[0]]({}, 'invalid'))
+}
+for (const [domain, factory, method, section] of [
+ ['reporting', 'createReporting', 'reportDetail', 'report_detail'],
+ ['reporting', 'createReporting', 'exportDownload', 'export_download'],
+ ['privacy', 'createPrivacy', 'privacyCopy', 'privacy_copy'],
+]) {
+ await domains[domain][factory](capture({ id: 'record' }))[method]('scope/a?')
+ assert.equal(request.path, `/api/v1/community/read/${section}?target=scope%2Fa%3F`)
+}
+console.log('M25–M29: reporting/privacy owned routes, encoded scopes, safe integers and original retry keys passed')

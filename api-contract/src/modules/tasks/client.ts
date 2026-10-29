@@ -6,6 +6,7 @@ import { validateTasks } from './validation.js'
 export function createTasks(transport: Transport) {
   const resource = createResource(transport, validateTasks)
   return {
+ taskSourceConfigure: (body: Record<string, unknown>, key: string) => resource.command('task_source_configure', body, key),
     eligibility: (id: string) => resource.read<TaskEligibility>('eligibility', id),
     eligibilityVerify: <T = Record<string, unknown>>(body: Record<string, unknown>, key: string) => resource.command<T>('eligibility_verify', body, key),
     rules: () => resource.read<TaskRules>('task_rules'),

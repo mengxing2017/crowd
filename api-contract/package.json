@@ -24,7 +24,9 @@
     "./settlements": "./src/modules/settlements/index.ts",
     "./campaigns": "./src/modules/campaigns/index.ts",
     "./notifications": "./src/modules/notifications/index.ts",
-    "./risk": "./src/modules/risk/index.ts"
+    "./risk": "./src/modules/risk/index.ts",
+    "./reporting": "./src/modules/reporting/index.ts",
+    "./privacy": "./src/modules/privacy/index.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
