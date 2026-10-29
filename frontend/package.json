@@ -5,6 +5,6 @@
   "scripts": {
     "dev": "pnpm --filter @crowd/web dev",
     "build": "pnpm --filter @crowd/web build",
-    "check": "pnpm -r typecheck && pnpm -r lint && pnpm -r build"
+    "check": "pnpm -r typecheck && pnpm -r lint && pnpm --filter @crowd/miniapp test && pnpm -r build"
   }
 }
