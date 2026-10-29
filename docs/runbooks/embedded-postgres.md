@@ -15,7 +15,7 @@ devbox run -- make web-dev
 
 首次运行可能联网下载服务端二进制，后续复用 `~/.theseus/postgresql` 安装缓存。数据库仅监听 127.0.0.1，使用随机端口、随机密码和临时数据目录，自动创建 `crowd_dev`。API 默认 `127.0.0.1:8080`，可用 `CROWD_BIND_ADDR=127.0.0.1:其他端口` 修改；嵌入式入口拒绝非环回 API 地址。
 
-`CROWD_DATABASE_URL` 不参与此入口配置，`CROWD_TEST_DATABASE_URL` 也不会用于开发库。不会自动读取 `.env`。同终端 export 的微信 AppID/AppSecret、推广域名等继续生效；生产 `CROWD_BOOTSTRAP_ADMIN_*` 凭据不参与嵌入式入口初始化；不会添加假微信身份或自动绕过注册协议。
+`CROWD_DATABASE_URL` 及 `CROWD_DATABASE_HOST` 等分项连接配置不参与此入口配置，`CROWD_TEST_DATABASE_URL` 也不会用于开发库。不会自动读取 `.env`。同终端 export 的微信 AppID/AppSecret、推广域名等继续生效；生产 `CROWD_BOOTSTRAP_ADMIN_*` 凭据不参与嵌入式入口初始化；不会添加假微信身份或自动绕过注册协议。
 
 正式 API 与开发入口共用 `backend/src/runtime.rs`：执行同一组 migration、启动推广码重试 worker，使用同一 Router 与优雅关闭流程。关闭顺序为 HTTP 排空、停止 worker、关闭 SQLx 连接池、停止 PostgreSQL、释放临时数据和密码文件；数据库创建、迁移或 HTTP 启动失败也走清理路径。日志输出数据库端口和数据目录用于诊断，不输出连接 URL 或数据库密码。
 

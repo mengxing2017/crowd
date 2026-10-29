@@ -81,7 +81,7 @@ devbox run -- make web-dev
 
 `make api-dev` 等同 `make dev-embedded`，也可运行 `devbox run dev-embedded`。入口自动下载/复用 PostgreSQL 17 二进制、选择随机数据库端口与密码、创建临时 `crowd_dev` 库，执行与正式服务相同的 migration 和推广码 worker，然后启动 API。**正常退出删除临时数据，每次重启重新建库**；安装缓存保留在 `~/.theseus/postgresql`。SIGKILL、系统崩溃等异常中断不保证完成清理。
 
-嵌入式入口忽略 `CROWD_DATABASE_URL` 和外部测试库 URL，不自动读取 `.env`，不会连接已有应用数据库。微信与其他业务配置仍由同一终端 export；不提供绕过微信身份校验的本地用户。开发管理员自动初始化；协议发布与岗位配置见 [M01–M04 运行记录](/runbooks/m01-m04.md)，临时库重启后需重新发布协议。
+嵌入式入口忽略外部数据库 URL、分项连接配置和外部测试库 URL，不自动读取 `.env`，不会连接已有应用数据库。微信与其他业务配置仍由同一终端 export；不提供绕过微信身份校验的本地用户。开发管理员自动初始化；协议发布与岗位配置见 [M01–M04 运行记录](/runbooks/m01-m04.md)，临时库重启后需重新发布协议。
 
 Web 访问 http://127.0.0.1:5173；API 默认监听 127.0.0.1:8080。`CROWD_BIND_ADDR` 可修改 API 端口，嵌入式入口只接受环回地址。`CROWD_API_ORIGIN` 可修改 Vite 代理上游，`RUST_LOG` 控制日志。详见 [嵌入式开发与验证](/runbooks/embedded-postgres.md)。
 
@@ -91,11 +91,16 @@ Web 访问 http://127.0.0.1:5173；API 默认监听 127.0.0.1:8080。`CROWD_BIND
 cp env.example .env
 # 填写 POSTGRES_PASSWORD，例如使用 openssl rand -hex 24 的结果。
 docker compose --env-file .env -f compose.yaml -f compose.dev.yaml up -d postgres
-export CROWD_DATABASE_URL='postgres://crowd:替换密码@127.0.0.1:5432/crowd'
+export CROWD_DATABASE_HOST=127.0.0.1
+export CROWD_DATABASE_PORT=5432
+export CROWD_DATABASE_NAME=crowd
+export CROWD_DATABASE_USER=crowd
+export CROWD_DATABASE_PASSWORD='替换为原始密码（支持@）'
+export CROWD_DATABASE_SSL_MODE=disable
 devbox run -- make api-external
 ```
 
-`api-external` 与生产二进制要求显式数据库 URL；URL 特殊字符须百分号编码，远程数据库按环境配置 TLS。Compose 仍部署独立 PostgreSQL，嵌入式库仅为 Cargo dev-dependency。
+`api-external` 与生产二进制要求显式数据库配置；可用分项字段原样传入密码，或保留完整 `CROWD_DATABASE_URL`（非空时优先，密码特殊字符须百分号编码）。远程数据库按环境配置 TLS。Compose 仍部署独立 PostgreSQL，嵌入式库仅为 Cargo dev-dependency。
 
 小程序运行 `make miniapp-dev`，在微信开发者工具导入 `frontend/apps/miniapp/dist/dev/mp-weixin`；发布构建为 `pnpm --dir frontend --filter @crowd/miniapp build`，产物在 `dist/build/mp-weixin`。先在 manifest.json 填写自己的微信 AppID。当前个人中心访问 API；构建时设置 `VITE_API_ORIGIN`，生产配置微信合法 HTTPS 请求/下载域名。微信 AppSecret 仅配置在服务端。初始化管理员、发布协议及二维码域名配置见 M01–M04 运行记录。
 

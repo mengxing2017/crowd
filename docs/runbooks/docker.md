@@ -65,7 +65,7 @@ chmod 600 .env
 openssl rand -hex 24
 ```
 
-将随机结果填入 `POSTGRES_PASSWORD`，使用 URL 安全字符，因为 Compose 将其拼接到数据库 URL。镜像标签默认 `crowd-api:local`、`crowd-web:local`。首次管理员需要同时填写 `CROWD_BOOTSTRAP_ADMIN_USERNAME` 和 `CROWD_BOOTSTRAP_ADMIN_PASSWORD`（12–128 字节），成功创建后移除这两项并重建 API 容器；不会覆盖已有账号。微信配置及协议发布见 [M01–M04 手册](m01-m04.md)。
+将随机结果填入 `POSTGRES_PASSWORD`。Compose 将原始密码作为独立字段传给 API，支持 `@` 等字符，无需 URL 编码；`.env` 中含 `$` 的值用单引号包裹以避免 Compose 插值。镜像标签默认 `crowd-api:local`、`crowd-web:local`。首次管理员需要同时填写 `CROWD_BOOTSTRAP_ADMIN_USERNAME` 和 `CROWD_BOOTSTRAP_ADMIN_PASSWORD`（12–128 字节），成功创建后移除这两项并重建 API 容器；不会覆盖已有账号。微信配置及协议发布见 [M01–M04 手册](m01-m04.md)。
 
 ```bash
 make compose-config
@@ -154,3 +154,9 @@ test -s crowd-backup.dump
 下载失败时使用 `docker build --progress=plain ...` 查看具体阶段：基础镜像拉取检查 Docker 仓库/DNS；APT 检查中科大源连通性；Cargo/npm 检查各自公共源。不要关闭 TLS 证书校验。就绪失败查看 API migration、数据库连接和数据库日志。
 
 2026-10-29：按本仓库配置核对构建上下文、镜像名称、端口、换源逻辑和命令。当前编辑环境未安装 Docker，未执行真实镜像构建、Compose 启动、镜像推送、离线导入或跨架构验证。这些操作须在具备 Docker 的隔离环境执行；容器就绪也不等于业务验收或官方到账验证。
+
+### 数据库分项连接配置验证（2026-10-29）
+
+API 新增 `CROWD_DATABASE_HOST`、`CROWD_DATABASE_PORT`、`CROWD_DATABASE_NAME`、`CROWD_DATABASE_USER`、`CROWD_DATABASE_PASSWORD`、`CROWD_DATABASE_SSL_MODE`，通过 SQLx 连接选项直接传入原始密码。非空 `CROWD_DATABASE_URL` 保持优先；使用分项时清除旧 URL。Compose 已改为分项传参，须配套部署包含此修改的新 API 镜像，旧二进制仍只接受 URL。
+
+Devbox / Rust 1.97.1 下格式、`cargo check --locked` 和 Clippy（all-targets、拒绝警告）通过。`cargo test --locked --bin crowd-api` 的 3 项测试通过，覆盖特殊字符密码保留、URL 优先与空值回退、配置校验及错误脱敏。完整 `make check-backend` 在测试产物生成阶段因磁盘空间耗尽中断，未完成全量测试；清理本包可再生构建产物后完成上述专项测试。未执行真实数据库密码认证、Compose 启动或 1Panel 部署验证。
