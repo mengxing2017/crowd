@@ -5,3 +5,5 @@ pub(crate) use crate::platform::south::port::Repository;
 
 pub(crate) mod rules;
 pub(crate) mod services;
+
+pub(crate) use super::adapter::privacy::retire_codes;

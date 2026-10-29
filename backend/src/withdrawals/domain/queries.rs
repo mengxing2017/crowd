@@ -55,7 +55,12 @@ pub fn read<P: DomainPort + ?Sized>(
                 "auditor",
             ]
             .contains(&r.as_str())
-        }) {
+        }) && !s
+            .withdrawals()
+            .applications
+            .values()
+            .any(|a| queue_access(s, actor, a["owner"].as_str().unwrap_or("")).is_ok())
+        {
             return Err(Failure("FORBIDDEN", "无队列查询岗位权限"));
         }
     }

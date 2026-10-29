@@ -8,12 +8,10 @@ pub trait QueriesRules: DomainPort {
         require(self.user(actor)?.status == "active", "账号不可查询任务")?;
         match section {
             "task_rules" => {
-                let u = self.user(actor)?;
                 require(
-                    u.roles.iter().any(|r| {
-                        ["operator", "rule_manager", "verifier", "task_reviewer"]
-                            .contains(&r.as_str())
-                    }) && u.scope.iter().any(|s| s == "*" || s == "platform"),
+                    ["operator", "rule_manager", "verifier", "task_reviewer"]
+                        .iter()
+                        .any(|r| self.authorize(actor, r, "platform").is_ok()),
                     "无规则管理权限",
                 )?;
                 Ok(
@@ -33,7 +31,13 @@ pub trait QueriesRules: DomainPort {
                         user.roles
                             .iter()
                             .any(|r| r == "task_reviewer" || r == "verifier")
-                            && !user.scope.is_empty(),
+                            && !user.scope.is_empty()
+                            || self.tasks().instances.values().any(|t| {
+                                ["task_reviewer", "verifier"].iter().any(|r| {
+                                    self.authorize(actor, r, t["product_id"].as_str().unwrap_or(""))
+                                        .is_ok()
+                                })
+                            }),
                         "无任务审核或复核权限",
                     )?;
                 }

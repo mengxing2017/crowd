@@ -14,7 +14,19 @@ pub trait BehaviorRules: DomainPort {
         if u.status == "disabled" {
             return Err(Failure("ACCOUNT_RESTRICTED", "账号已停用，请联系客服申诉"));
         }
-        if u.roles.iter().any(|r| r == role) && (u.scope.iter().any(|s| s == "*" || s == target)) {
+        if (u.roles.iter().any(|r| r == role) && u.scope.iter().any(|s| s == "*" || s == target))
+            || self.security().grants.values().any(|g| {
+                g["user_id"] == actor
+                    && g["status"] == "approved"
+                    && g["expires_at"].as_i64().unwrap_or(0) > self.epoch()
+                    && g["roles"]
+                        .as_array()
+                        .is_some_and(|v| v.iter().any(|r| r == role))
+                    && g["scope"]
+                        .as_array()
+                        .is_some_and(|v| v.iter().any(|s| s == "*" || s == target))
+            })
+        {
             Ok(())
         } else {
             Err(Failure("FORBIDDEN", "无此操作权限或数据范围"))

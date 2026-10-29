@@ -6,6 +6,8 @@ use axum::{
 };
 pub fn routes() -> Router<Application> {
     Router::new()
+        .merge(crate::reporting::remote::routes())
+        .merge(crate::privacy::remote::routes())
         .merge(crate::campaigns::remote::routes())
         .merge(crate::notifications::remote::routes())
         .merge(crate::risk::remote::routes())

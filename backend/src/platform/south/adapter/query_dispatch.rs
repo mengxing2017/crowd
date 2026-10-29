@@ -11,6 +11,27 @@ pub(crate) fn read(
     epoch: i64,
 ) -> Result<Value> {
     crate::notifications::south::port::rules::sync(state, epoch);
+    if section == "security" {
+        return crate::identity::south::port::rules::security_read(state, actor);
+    }
+    if crate::reporting::south::port::rules::is_read(section) {
+        return crate::reporting::south::port::rules::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+            epoch,
+        );
+    }
+    if crate::privacy::south::port::rules::is_read(section) {
+        return crate::privacy::south::port::rules::read(
+            state,
+            actor,
+            section,
+            target.unwrap_or(actor),
+            epoch,
+        );
+    }
     if crate::campaigns::south::port::rules::is_read(section) {
         return crate::campaigns::south::port::rules::read(
             state,

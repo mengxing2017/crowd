@@ -52,12 +52,16 @@ async fn serve_inner(
     let listener = tokio::net::TcpListener::bind(address).await?;
     let code_jobs = crate::platform::south::port::Repository { pool: pool.clone() };
     let catalog = crate::catalog::south::port::services::ReconcileCatalog::new(code_jobs.clone());
+    let exports = crate::reporting::south::port::services::ProcessExports::new(code_jobs.clone());
     let worker = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
         loop {
             interval.tick().await;
             if catalog.execute().await.is_err() {
                 tracing::warn!("catalog lifecycle notifications temporarily unavailable");
+            }
+            if exports.execute().await.is_err() {
+                tracing::warn!("report export queue temporarily unavailable");
             }
             if code_jobs.retry_code_jobs().await.is_err() {
                 tracing::warn!("promotion code retry queue temporarily unavailable");

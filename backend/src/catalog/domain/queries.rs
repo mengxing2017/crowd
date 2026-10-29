@@ -17,18 +17,19 @@ pub trait QueriesRules: DomainPort {
         }
         match section {
             "catalog_admin" => {
+                let roles = ["operator", "product_reviewer", "product_emergency"];
+                let can_see = |id: &str| roles.iter().any(|r| self.authorize(actor, r, id).is_ok());
                 let user = self.user(actor)?;
-                if !user.roles.iter().any(|r| {
-                    ["operator", "product_reviewer", "product_emergency"].contains(&r.as_str())
-                }) {
+                if !user.roles.iter().any(|r| roles.contains(&r.as_str()))
+                    && !self.catalog().products.keys().any(|id| can_see(id))
+                {
                     return Err(Failure("FORBIDDEN", "无产品管理权限"));
                 }
-                let all = user.scope.iter().any(|s| s == "*");
                 let products: Vec<_> = self
                     .catalog()
                     .products
                     .values()
-                    .filter(|p| all || user.scope.iter().any(|s| p["id"] == *s))
+                    .filter(|p| can_see(p["id"].as_str().unwrap_or("")))
                     .cloned()
                     .collect();
                 Ok(

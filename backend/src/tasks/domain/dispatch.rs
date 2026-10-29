@@ -1,7 +1,8 @@
 pub fn is_command(a: &str) -> bool {
     matches!(
         a,
-        "price_save"
+        "task_source_configure"
+            | "price_save"
             | "price_review"
             | "template_save"
             | "template_review"

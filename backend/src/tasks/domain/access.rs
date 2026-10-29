@@ -14,6 +14,7 @@ pub trait AccessRules: DomainPort {
             .and_then(|v| v["product_id"].as_str())
             .unwrap_or("platform");
         match action {
+            "task_source_configure" => self.authorize(actor, "rule_manager", "task_sources"),
             "price_save" => self.authorize(actor, "rule_manager", "platform"),
             "price_review" => self.authorize(actor, "verifier", "platform"),
             "template_save" | "template_disable" => self.authorize(actor, "operator", "platform"),

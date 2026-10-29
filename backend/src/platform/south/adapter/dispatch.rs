@@ -44,7 +44,20 @@ impl State {
         })
     }
     pub fn check_command_access(&self, actor: &str, action: &str, input: &Value) -> Result<()> {
-        self.user(actor)?;
+        if self.user(actor)?.status != "active" && action != "logout" {
+            return Err(Failure("ACCOUNT_RESTRICTED", "账号已停用，请联系客服申诉"));
+        }
+        if crate::identity::south::port::rules::is_security_command(action) {
+            return crate::identity::south::port::rules::security_access(
+                self, actor, action, input,
+            );
+        }
+        if crate::reporting::south::port::rules::is_command(action) {
+            return crate::reporting::south::port::rules::access(self, actor, action, input);
+        }
+        if crate::privacy::south::port::rules::is_command(action) {
+            return crate::privacy::south::port::rules::access(self, actor, action, input);
+        }
         if crate::campaigns::south::port::rules::is_command(action) {
             return crate::campaigns::south::port::rules::access(self, actor, action, input);
         }

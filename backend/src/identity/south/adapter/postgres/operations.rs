@@ -46,7 +46,8 @@ impl Repository {
                 .as_str()
                 .filter(|c| state.resolve(c).is_ok())
                 .map(str::to_owned);
-            state.register_user(&id,json!({"version":input["agreement_id"],"time":now,"agreed":input["agreed"],"bootstrap":bootstrap}),source);
+            let registered_at = Self::epoch(&mut tx).await?;
+            state.register_user(&id,json!({"version":input["agreement_id"],"registered_at":registered_at,"time":now,"agreed":input["agreed"],"bootstrap":bootstrap}),source);
             sqlx::query("INSERT INTO crowd_code_jobs(user_id,status) VALUES($1,'pending')")
                 .bind(&id)
                 .execute(&mut *tx)

@@ -13,6 +13,25 @@ pub(crate) fn read<P: DomainPort + ?Sized>(
         "me" => {
             let mut value = serde_json::to_value(state.user(actor)?).expect("serialize user");
             value["receipts"] = json!(mask_receipts(&state.user(actor)?.receipts));
+            // Expose active capabilities for navigation; authorization still checks each role/scope pair.
+            let mut roles = state.user(actor)?.roles.clone();
+            for grant in state.security().grants.values().filter(|g| {
+                g["user_id"] == actor
+                    && g["status"] == "approved"
+                    && g["expires_at"].as_i64().unwrap_or(0) > state.epoch()
+            }) {
+                for role in grant["roles"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                {
+                    if !roles.iter().any(|r| r == role) {
+                        roles.push(role.to_owned());
+                    }
+                }
+            }
+            value["roles"] = json!(roles);
             Ok(value)
         }
         "users" => {

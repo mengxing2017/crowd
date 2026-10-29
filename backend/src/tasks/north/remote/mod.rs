@@ -10,3 +10,7 @@ mod templates;
 
 pub use routes::routes;
 mod eligibility;
+
+mod signed_event;
+
+mod task_source_configure;

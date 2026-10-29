@@ -24,6 +24,29 @@ pub(crate) async fn apply(
         crate::receipts::south::port::services::cleanup(tx, state, context).await?
     } else if action == "receipt_reveal" {
         crate::receipts::south::port::services::reveal(state, actor, input, request, now)?
+    } else if crate::identity::south::port::rules::is_security_command(action) {
+        let value = crate::identity::south::port::rules::security_command(
+            state,
+            actor,
+            action,
+            input,
+            generated,
+            context.epoch,
+        )?;
+        state.log(
+            actor,
+            action,
+            input["user_id"].as_str().unwrap_or("security"),
+            request,
+            now,
+        );
+        value
+    } else if crate::reporting::south::port::rules::is_command(action) {
+        crate::reporting::south::port::services::apply(state, context)?
+    } else if action == "privacy_file_cleanup" {
+        crate::privacy::south::port::services::cleanup_file(tx, state, context).await?
+    } else if crate::privacy::south::port::rules::is_command(action) {
+        crate::privacy::south::port::services::apply(state, context)?
     } else if crate::campaigns::south::port::rules::is_command(action) {
         crate::campaigns::south::port::services::apply(state, context)?
     } else if crate::notifications::south::port::rules::is_command(action) {

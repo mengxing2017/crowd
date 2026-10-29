@@ -54,3 +54,6 @@ mod validation_tests;
 pub mod campaigns;
 pub mod notifications;
 pub mod risk;
+
+pub mod privacy;
+pub mod reporting;

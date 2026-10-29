@@ -25,7 +25,7 @@ async fn system_contract_and_liveness_do_not_require_database() {
     let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(
         value,
-        serde_json::json!({"data":{"type":"systems","id":"crowd","attributes":{"application":"crowd","version":env!("CARGO_PKG_VERSION"),"stage":"foundation"}}})
+        serde_json::json!({"data":{"type":"systems","id":"crowd","attributes":{"application":"crowd","version":env!("CARGO_PKG_VERSION"),"stage":"foundation","capabilities":["manual_settlement","privacy_copy","task_events_hmac","cursor_pagination"],"read_compatibility":"既有查询保持兼容；新类型操作需客户端支持，旧申请仍可查询"}}})
     );
     let response = app
         .oneshot(

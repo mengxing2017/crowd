@@ -5,3 +5,5 @@ mod writer;
 pub use writer::AuditWriter;
 
 pub(crate) mod rules;
+
+pub(crate) use super::adapter::changes::annotate_change;

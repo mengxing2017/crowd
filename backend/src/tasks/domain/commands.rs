@@ -13,6 +13,34 @@ pub trait CommandsRules: DomainPort {
         now: i64,
     ) -> Result<Value> {
         self.tasks_access(actor, action, input)?;
+        if action == "task_source_configure" {
+            let source = crate::shared::text(input, "source")?;
+            crate::shared::text(input, "reason")?;
+            crate::shared::require(
+                source.len() <= 64
+                    && source
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+                "来源编号无效",
+            )?;
+            let old = self
+                .tasks()
+                .event_receipts
+                .get(&format!("config:{source}"))
+                .cloned()
+                .unwrap_or(serde_json::json!({"version":0}));
+            crate::shared::version(&old, input)?;
+            crate::shared::require(input["enabled"].is_boolean(), "须明确来源启停状态")?;
+            self.tasks_mut().disabled_sources.retain(|v| v != source);
+            if input["enabled"] == false {
+                self.tasks_mut().disabled_sources.push(source.into());
+            }
+            let v = serde_json::json!({"id":format!("config:{source}"),"source":source,"enabled":input["enabled"],"version":old["version"].as_u64().unwrap_or(0)+1,"actor":actor,"at":now});
+            self.tasks_mut()
+                .event_receipts
+                .insert(format!("config:{source}"), v.clone());
+            return Ok(v);
+        }
         if action.starts_with("price_") || action.starts_with("template_") {
             return self.rule_command(actor, action, input, generated, now);
         }

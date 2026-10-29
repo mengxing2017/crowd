@@ -38,6 +38,22 @@ impl ExecuteCommand {
             Repository::commit(tx).await?;
             return Err(failure);
         }
+        if let Err(failure) =
+            Repository::require_reauthentication(&mut tx, &state, token, action).await
+        {
+            let now = Repository::time(&mut tx).await?;
+            state.log_failure(
+                &actor,
+                action,
+                input["id"].as_str().unwrap_or(&actor),
+                request,
+                &now,
+                failure.0,
+            );
+            Repository::save(&mut tx, &state).await?;
+            Repository::commit(tx).await?;
+            return Err(failure);
+        }
         let idempotency = format!("{actor}:{key}");
         if let Some(previous) = state.idempotency.get(&idempotency) {
             if previous["action"] != action || previous["input"] != *input {
@@ -125,6 +141,7 @@ impl ExecuteCommand {
         if action == "logout" || action == "web_ticket" {
             state.log(&actor, action, &actor, request, &now);
         }
+        crate::platform::south::port::annotate_change(&mut state, &before, input, &result);
         state.idempotency.insert(
             idempotency,
             json!({"action":action,"input":input,"result":result}),

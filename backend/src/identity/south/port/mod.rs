@@ -11,3 +11,5 @@ pub(crate) mod rules;
 pub(crate) mod services;
 
 pub(crate) use super::adapter::wechat;
+
+pub(crate) use super::adapter::privacy::retire_profile;

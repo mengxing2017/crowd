@@ -18,3 +18,5 @@ pub(crate) mod services;
 pub(crate) use super::adapter::postgres::database;
 
 pub use super::adapter::bootstrap_staff;
+
+pub(crate) use crate::audit::south::port::annotate_change;

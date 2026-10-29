@@ -21,6 +21,9 @@ impl<T: DomainPort + ?Sized> VerifiedTaskResult for T {
         {
             return Err(invalid("可信成果参数错误"));
         }
+        if self.tasks().disabled_sources.iter().any(|v| v == source) {
+            return Err(Failure("SOURCE_DISABLED", "任务来源已停用"));
+        }
         let t = self
             .tasks()
             .instances

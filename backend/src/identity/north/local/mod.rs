@@ -8,3 +8,6 @@ mod input_files;
 pub(crate) use input_files::validate_input_files;
 mod session_commands;
 pub(crate) use session_commands::session_command;
+
+mod reauthenticate_staff;
+pub use reauthenticate_staff::ReauthenticateStaff;

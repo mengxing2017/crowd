@@ -9,3 +9,6 @@ mod access;
 pub(crate) use access::{access, validate_input};
 
 pub use behavior::BehaviorRules;
+
+mod security;
+pub(crate) use security::*;

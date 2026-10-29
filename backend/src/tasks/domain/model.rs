@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Tasks {
+    pub disabled_sources: Vec<String>,
+    pub event_receipts: BTreeMap<String, Value>,
     pub reminders: Vec<String>,
     pub attachments: BTreeMap<String, Value>,
     pub verified_results: BTreeMap<String, Value>,

@@ -36,26 +36,7 @@ pub(crate) fn command<P: DomainPort + ?Sized>(
             if action == "access" {
                 let roles: Vec<String> = serde_json::from_value(input["roles"].clone())
                     .map_err(|_| invalid("角色格式错误"))?;
-                if roles.iter().any(|r| {
-                    ![
-                        "user",
-                        "rule_manager",
-                        "identity_reviewer",
-                        "promotion_manager",
-                        "auditor",
-                        "operator",
-                        "product_reviewer",
-                        "product_emergency",
-                        "attribution_reviewer",
-                        "task_reviewer",
-                        "settlement_reviewer",
-                        "manual_handler",
-                        "verifier",
-                        "support",
-                        "risk_manager",
-                    ]
-                    .contains(&r.as_str())
-                }) {
+                if roles.iter().any(|r| !valid_role(r)) {
                     return Err(invalid("未知角色"));
                 }
                 u.roles = roles;
@@ -84,6 +65,34 @@ pub(crate) fn command<P: DomainPort + ?Sized>(
         }
         _ => return Err(Failure("NOT_FOUND", "操作不存在")),
     };
-    state.log(actor, action, actor, request, time);
+    state.log(
+        actor,
+        action,
+        input["user_id"].as_str().unwrap_or(actor),
+        request,
+        time,
+    );
     Ok(result)
+}
+
+pub(super) fn valid_role(r: &str) -> bool {
+    [
+        "user",
+        "rule_manager",
+        "identity_reviewer",
+        "promotion_manager",
+        "auditor",
+        "operator",
+        "product_reviewer",
+        "product_emergency",
+        "attribution_reviewer",
+        "task_reviewer",
+        "settlement_reviewer",
+        "manual_handler",
+        "verifier",
+        "support",
+        "risk_manager",
+        "privacy_manager",
+    ]
+    .contains(&r)
 }

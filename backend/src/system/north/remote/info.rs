@@ -7,6 +7,8 @@ pub struct Attributes {
     application: &'static str,
     version: &'static str,
     stage: &'static str,
+    capabilities: &'static [&'static str],
+    read_compatibility: &'static str,
 }
 #[derive(Serialize)]
 pub struct Resource {
@@ -28,6 +30,13 @@ pub async fn system_info(State(app): State<Application>) -> Json<Document> {
                 application: info.application,
                 version: info.version,
                 stage: info.stage,
+                capabilities: &[
+                    "manual_settlement",
+                    "privacy_copy",
+                    "task_events_hmac",
+                    "cursor_pagination",
+                ],
+                read_compatibility: "既有查询保持兼容；新类型操作需客户端支持，旧申请仍可查询",
             },
         },
     })

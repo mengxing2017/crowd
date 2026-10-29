@@ -7,6 +7,8 @@ use serde_json::Value;
 #[derive(Deserialize)]
 pub(crate) struct Scope {
     pub(crate) target: Option<String>,
+    pub(crate) limit: Option<usize>,
+    pub(crate) cursor: Option<String>,
 }
 
 pub(crate) async fn read(
@@ -20,7 +22,8 @@ pub(crate) async fn read(
         app.services
             .queries
             .execute(token(headers), section, scope.target.as_deref(), &r)
-            .await,
+            .await
+            .and_then(|v| super::pagination::paginate(v, scope.limit, scope.cursor.as_deref())),
         &r,
     )
 }

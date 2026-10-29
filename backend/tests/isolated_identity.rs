@@ -13,8 +13,18 @@ use std::collections::BTreeMap;
 #[derive(Default)]
 struct IdentityMemory {
     users: BTreeMap<String, User>,
+    security: crate::identity::south::port::rules::Security,
 }
 impl DomainPort for IdentityMemory {
+    fn security(&self) -> &crate::identity::south::port::rules::Security {
+        &self.security
+    }
+    fn security_mut(&mut self) -> &mut crate::identity::south::port::rules::Security {
+        &mut self.security
+    }
+    fn epoch(&self) -> i64 {
+        100
+    }
     fn users(&self) -> &BTreeMap<String, User> {
         &self.users
     }

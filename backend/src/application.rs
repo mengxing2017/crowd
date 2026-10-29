@@ -15,6 +15,8 @@ use crate::promotion::south::port::services::ResolvePromotion;
 /// Composition only: each field owns one application use case.
 #[derive(Clone)]
 pub struct ApplicationServices {
+    pub task_events: crate::tasks::south::port::ReceiveSignedTaskEvent,
+    pub staff_reauthentication: crate::identity::south::port::services::ReauthenticateStaff,
     pub staff_login: StaffLogin,
     pub wechat_login: WechatLogin,
     pub agreements: ReadAgreements,
@@ -35,6 +37,9 @@ pub struct ApplicationServices {
 impl ApplicationServices {
     pub fn new(repo: Repository) -> Self {
         Self {
+            task_events: crate::tasks::south::port::ReceiveSignedTaskEvent::new(repo.clone()),
+            staff_reauthentication:
+                crate::identity::south::port::services::ReauthenticateStaff::new(repo.clone()),
             staff_login: StaffLogin::new(repo.clone()),
             wechat_login: WechatLogin::new(repo.clone()),
             agreements: ReadAgreements::new(repo.clone()),

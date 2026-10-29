@@ -9,7 +9,8 @@ pub trait BehaviorRules: DomainPort {
             .filter(|r| r["status"] == "published")
             .map(|r| json!({"id":r["id"],"kind":r["kind"],"version":r["version"]}))
             .collect();
-        self.audit_mut().push(json!({"published_rules":published,"actor":actor,"action":action,"object":target,"request_id":request,"time":time,"result":"success","rule_version":"M01-M04-v1"}));
+        let sequence = self.audit().len() + 1;
+        self.audit_mut().push(json!({"id":format!("audit:{sequence}"),"sequence":sequence,"published_rules":published,"actor":actor,"action":action,"object":target,"request_id":request,"time":time,"result":"success","rule_version":"M01-M04-v1"}));
     }
     fn log_failure(
         &mut self,
