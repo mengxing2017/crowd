@@ -7,6 +7,7 @@ export type * from '@crowd/api-contract/tasks'
 export { taskStatusNames } from '@crowd/api-contract/tasks'
 
 export const tasksCommands = {
+ task_source_configure: tasks.taskSourceConfigure,
   eligibility_verify: tasks.eligibilityVerify,
   task_claim: tasks.claim,
   price_save: tasks.priceSave,

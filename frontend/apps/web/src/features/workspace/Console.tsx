@@ -4,7 +4,7 @@ import { governance } from '../governance/api'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BookOutlined, DashboardOutlined, FileProtectOutlined, LogoutOutlined, QrcodeOutlined, ReloadOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
 import { PageContainer, ProLayout } from '@ant-design/pro-components'
-import { Alert, Button, Dropdown, Space, Spin, Tag, Tooltip, Result } from 'antd'
+import { Alert, Button, Dropdown, Space, Spin, Tag, Tooltip, Result, Modal, Input } from 'antd'
 import { AdminLogin } from '../identity/AdminLogin'
 import { setToken, hasToken } from '../session/api'
 import { BusinessError } from '../platform/api'
@@ -29,7 +29,10 @@ const Adjustments = lazy(() => import('../commissions/Adjustments').then(m => ({
 const Support = lazy(() => import('../support/Support').then(m => ({ default: m.Support })))
 const Risk = lazy(() => import('../risk/Risk').then(m => ({ default: m.Risk })))
 const Notifications = lazy(() => import('../notifications/Notifications').then(m => ({ default: m.Notifications })))
-const icons = { campaigns: <DashboardOutlined />, adjustments: <FileProtectOutlined />, support: <TeamOutlined />, risk: <SafetyCertificateOutlined />, notifications: <BookOutlined />, commissions: <SafetyCertificateOutlined />, withdrawalRules: <FileProtectOutlined />, settlements: <SafetyCertificateOutlined />, taskRules: <FileProtectOutlined />, tasks: <SafetyCertificateOutlined />, catalog: <BookOutlined />, attribution: <QrcodeOutlined />, welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
+const Security = lazy(() => import('../identity/Security').then(m => ({ default: m.Security })))
+const Reporting = lazy(() => import('../reporting/Reporting').then(m => ({ default: m.Reporting })))
+const Privacy = lazy(() => import('../privacy/Privacy').then(m => ({ default: m.Privacy })))
+const icons = { security: <SafetyCertificateOutlined />, reporting: <DashboardOutlined />, privacy: <FileProtectOutlined />, campaigns: <DashboardOutlined />, adjustments: <FileProtectOutlined />, support: <TeamOutlined />, risk: <SafetyCertificateOutlined />, notifications: <BookOutlined />, commissions: <SafetyCertificateOutlined />, withdrawalRules: <FileProtectOutlined />, settlements: <SafetyCertificateOutlined />, taskRules: <FileProtectOutlined />, tasks: <SafetyCertificateOutlined />, catalog: <BookOutlined />, attribution: <QrcodeOutlined />, welcome: <DashboardOutlined />, rules: <FileProtectOutlined />, users: <TeamOutlined />, promotions: <QrcodeOutlined />, audit: <SafetyCertificateOutlined />, guide: <BookOutlined /> }
 interface Pending { action: string; body: Record<string, unknown>; key: string; owner: string }
 function currentSection(): Section { return sections.find(section => `#/${section.key}` === window.location.hash)?.key || 'welcome' }
 async function readStaffSession() {
@@ -42,6 +45,7 @@ async function readStaffSession() {
   return { user, rules }
 }
 export function Console() {
+ const [reauthOpen,setReauthOpen]=useState(false),[reauthPassword,setReauthPassword]=useState('')
   const [restoring, setRestoring] = useState(hasToken)
   const [restoreError, setRestoreError] = useState('')
   const [restoreAttempt, setRestoreAttempt] = useState(0)
@@ -75,6 +79,7 @@ export function Console() {
     try { await work(); setNotice({ type: 'success', text: '操作完成' }); return true }
     catch (error) {
       if (error instanceof BusinessError && error.detail.code === 'SESSION_EXPIRED') clearSession(true)
+      if (error instanceof BusinessError && error.detail.code === 'REAUTH_REQUIRED') setReauthOpen(true)
       setNotice({ type: 'error', text: error instanceof Error ? error.message : '操作失败，请查询原结果后重试' }); return false
     } finally { locked.current = false; setBusy(false) }
   }
@@ -107,6 +112,8 @@ export function Console() {
   return <div className="admin-shell"><ProLayout title="Crowd" logo={<span className="brand-mark">C</span>} layout="mix" navTheme="light" fixSiderbar fixedHeader contentWidth="Fluid" location={{ pathname: `/${active.key}` }} route={{ path: '/', routes: available.map(item => ({ path: `/${item.key}`, name: item.title, icon: icons[item.key] })) }} menuItemRender={(item, dom) => <a href={`#${item.path}`} onClick={event => { event.preventDefault(); navigate(item.path?.slice(1) as Section) }}>{dom}</a>} avatarProps={{ icon: <UserOutlined />, title: me.nickname, render: (_, dom) => <Dropdown menu={{ items: [{ key: 'guide', label: '使用指南', icon: <BookOutlined /> }, { type: 'divider' }, { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, disabled: busy }], onClick: ({ key }) => { if (key === 'guide') navigate('guide'); else if (key === 'logout') void run(async () => { try { await executeCommand('logout', {}, crypto.randomUUID()) } finally { clearSession() } }) } }}><span className="account-menu">{dom}</span></Dropdown> }} actionsRender={() => [<Tooltip title="刷新当前账号与规则" key="refresh"><Button type="text" aria-label="刷新当前账号与规则" icon={<ReloadOutlined spin={busy} />} disabled={busy} onClick={() => void run(refresh)} /></Tooltip>, <Tooltip title="使用指南" key="guide"><Button type="text" aria-label="使用指南" icon={<BookOutlined />} onClick={() => navigate('guide')} /></Tooltip>]} footerRender={() => <footer className="workspace-footer">Crowd · 产品推广与协作平台 <span>业务数字记录 · 人工线下结算</span></footer>}>
     <PageContainer title={active.title} content={active.description} breadcrumb={{ items: [{ title: '运营管理' }, { title: active.title }] }} extra={<Tag color="blue">{me.status === 'active' ? '正常工作中' : '账号受限'}</Tag>}>
       <Space orientation="vertical" size={20} className="full-width">
+        <Button disabled={busy} onClick={() => setReauthOpen(true)}>高风险操作：再次验证当前会话</Button>
+        <Modal title="再次验证当前后台会话" open={reauthOpen} onCancel={() => { setReauthOpen(false); setReauthPassword('') }} confirmLoading={busy} onOk={() => void run(async () => { try { await identity.reauthenticate(reauthPassword); setReauthOpen(false) } finally { setReauthPassword('') } })}><Input.Password aria-label="后台密码" autoComplete="current-password" value={reauthPassword} onChange={e => setReauthPassword(e.target.value)} /></Modal>
         {notice && <Alert type={notice.type} showIcon title={notice.text} closable onClose={() => setNotice(undefined)} />}
         {pending && pending.owner === me.id && <Alert type="warning" showIcon title="上次提交结果尚未确认" description="请先查询原结果；重试将使用原动作、内容和请求键。" action={<Space wrap><Button loading={busy} onClick={() => void run(async () => { await platform.commandResult(pending.key); setPending(null); await refresh() })}>查询原结果</Button><Button disabled={busy} onClick={() => void run(async () => { await executeCommand(pending.action, pending.body, pending.key); setPending(null); await refresh() })}>原请求重试</Button></Space>} />}
         <Spin spinning={busy} delay={300}><Suspense fallback={<div className="page-loading"><Spin /></div>}>
@@ -127,6 +134,9 @@ export function Console() {
           {active.key === 'support' && <Support locked={busy || !!pending} run={run} save={save} />}
           {active.key === 'risk' && <Risk locked={busy || !!pending} run={run} save={save} />}
           {active.key === 'notifications' && <Notifications locked={busy || !!pending} run={run} save={save} />}
+          {active.key === 'security' && <Security locked={busy || !!pending} run={run} save={save} />}
+          {active.key === 'reporting' && <Reporting locked={busy || !!pending} run={run} save={save} />}
+          {active.key === 'privacy' && <Privacy locked={busy || !!pending} run={run} save={save} />}
           {active.key === 'guide' && <Guide />}
         </Suspense></Spin>
       </Space>

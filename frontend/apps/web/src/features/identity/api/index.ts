@@ -5,6 +5,11 @@ export const identity = createIdentity(transport)
 export type * from '@crowd/api-contract/identity'
 
 export const identityCommands = {
+ security_policy_publish: identity.securityPolicyPublish,
+ temporary_grant_request: identity.temporaryGrantRequest,
+ temporary_grant_review: identity.temporaryGrantReview,
+ temporary_grant_revoke: identity.temporaryGrantRevoke,
+
   phone: identity.phone,
   access: identity.access,
   restriction: identity.restriction,

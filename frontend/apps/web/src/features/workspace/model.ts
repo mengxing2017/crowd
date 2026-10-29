@@ -1,5 +1,8 @@
-export type Section = 'campaigns' | 'adjustments' | 'support' | 'risk' | 'notifications' | 'commissions' | 'withdrawalRules' | 'settlements' | 'welcome' | 'rules' | 'users' | 'promotions' | 'audit' | 'guide' | 'catalog' | 'attribution' | 'taskRules' | 'tasks'
+export type Section = 'security' | 'reporting' | 'privacy' | 'campaigns' | 'adjustments' | 'support' | 'risk' | 'notifications' | 'commissions' | 'withdrawalRules' | 'settlements' | 'welcome' | 'rules' | 'users' | 'promotions' | 'audit' | 'guide' | 'catalog' | 'attribution' | 'taskRules' | 'tasks'
 export const sections: { key: Section; title: string; description: string; role?: string; roles?: string[] }[] = [
+ { key: 'security', title: '后台安全与临时授权', description: '再次验证、独立授权审批与任务来源启停', role: 'identity_reviewer' },
+ { key: 'reporting', title: '统计与记录核对', description: '固定水位、安全导出与差异处置', roles: ['auditor', 'operator'] },
+ { key: 'privacy', title: '隐私与数字治理', description: '显式保留政策、注销审批与修复预检', roles: ['privacy_manager', 'rule_manager', 'settlement_reviewer', 'verifier'] },
   { key: 'campaigns', title: '活动计划与统计', description: '可选计划额度、业务统计与存量责任', roles: ['operator', 'auditor'] },
   { key: 'adjustments', title: '任务撤销与数字调整', description: '依据登记、独立复核与在途争议', roles: ['settlement_reviewer', 'verifier', 'auditor'] },
   { key: 'support', title: '客服工单与申诉', description: '分类咨询、转派升级与独立复核', roles: ['support', 'rule_manager'] },
