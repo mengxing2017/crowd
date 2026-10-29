@@ -1,3 +1,5 @@
+import { privacyCommands } from '../privacy/api'
+import { reportingCommands } from '../reporting/api'
 import { campaignsCommands } from '../campaigns/api'
 import { notificationsCommands } from '../notifications/api'
 import { riskCommands } from '../risk/api'
@@ -15,6 +17,8 @@ import { tasksCommands } from '../tasks/api'
 
 type Command = (body: Record<string, unknown>, key: string) => Promise<unknown>
 const commands: Record<string, Command> = {
+ ...privacyCommands,
+ ...reportingCommands,
  ...campaignsCommands,
  ...notificationsCommands,
  ...riskCommands,
