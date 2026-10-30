@@ -26,7 +26,7 @@ import { setToken, origin, onSessionExpired, sessionVersion, assertSession } fro
 import { usePrivateFiles } from '../../features/files/private-files'
 import { chooseImagePath } from '../../features/files/api'
 import { promotionSource } from '../../features/promotion/entry'
-import { rememberCommand, forgetCommand, restoreCommand, publishRecovered, type PendingCommand } from '../../features/platform/recovery'
+import { rememberCommand, forgetCommand, restoreCommand, publishRecovered, type PendingCommand, type RecoveryTarget } from '../../features/platform/recovery'
 const catalogState = ref<'initial' | 'loading' | 'ready' | 'error'>('initial')
 const catalogError = ref('')
 const compatibility = ref('')
@@ -135,10 +135,10 @@ async function refreshAfterCommand() {
   refreshWarning.value = ''
   try { await refresh(); refreshWarning.value = '' } catch { refreshWarning.value = '提交已成功，但资料刷新失败；请刷新查询，不要重复提交'; message.value = refreshWarning.value }
 }
-async function submit(action: string, body: Record<string, unknown>) {
+async function submit(action: string, body: Record<string, unknown>, target?: RecoveryTarget) {
   if (pending.value) throw new Error('请先查询上次提交结果，或使用原请求重试')
   const input = JSON.parse(JSON.stringify(body)) as Record<string, unknown>
-  const item: PendingCommand = { action, body: input, key: key(), owner: me.value?.id || '' }
+  const item: PendingCommand = { action, target, body: input, key: key(), owner: me.value?.id || '' }
   rememberCommand(item); pending.value = item
   let value: Record<string, unknown>
   try { value = await executeCommand(action, input, item.key) }
@@ -156,13 +156,15 @@ async function recoverCommand(retry = false) {
   if (!item || item.owner !== me.value?.id) throw new Error('请登录原账号查询提交结果')
   const value = retry && item.body ? await executeCommand(item.action, item.body, item.key) : await platform.commandResult(item.key)
   if (!privateFiles.current(stamp)) throw new Error('页面已隐藏，请返回后重新查询原结果')
-  forgetCommand(item); pending.value = null
-  publishRecovered({ action: item.action, result: value })
-  if (item.action === 'receipt_reveal') {
+  await publishRecovered({ action: item.action, target: item.target, result: value })
+  if (!privateFiles.current(stamp)) throw new Error('页面已隐藏，请返回后重新查询原结果')
+  if (item.action === 'receipt_reveal' && !item.target) {
     if (typeof value.account === 'string' && privateFiles.current(stamp)) fullAccount.value = value.account
     if (typeof value.file_id === 'string') { const path = await privateFiles.download(fileUrl(value.file_id), stamp); if (path) privateImage.value = path }
   }
   if (item.action === 'web_ticket') { ticket.value = String(value.ticket || ''); message.value = '已找回原票据；如已过期请重新生成' }
+  if (!privateFiles.current(stamp)) throw new Error('页面已隐藏，请返回后重新查询原结果')
+  forgetCommand(item); pending.value = null
   await refreshAfterCommand()
 }
 async function login() {

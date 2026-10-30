@@ -34,26 +34,33 @@ async function load(more = false) {
 }
 watch(() => props.revision, () => { void props.run(() => load()) }, { immediate: true })
 function resetDraft() { const t=selected.value; draft.value=JSON.parse(JSON.stringify(t?.draft || (t?.status==='supplement' ? t.receipt?.evidence : undefined) || { fields: {} })) as Evidence; occurred.value=draft.value.occurred_at ? new Date(draft.value.occurred_at*1000).toISOString() : ''; confirmed.value=false }
-async function open(t: TaskInstance) { privateFiles.clear(); selected.value = await tasks.detail(t.id); resetDraft(); reason.value = ''; previewImages.value = [] }
+async function open(t: TaskInstance) { privateFiles.clear(); const stamp = privateFiles.capture(); const detail = await tasks.detail(t.id); if (!privateFiles.current(stamp)) return; selected.value = detail; resetDraft(); reason.value = ''; previewImages.value = [] }
 async function act(action: string, body: Record<string, unknown> = {}) {
   if (!selected.value) return
-  const result = await props.submit(action, { id: selected.value.id, version: selected.value.version, ...body })
-  if (result.id && typeof result.version === 'number') selected.value = result as unknown as TaskInstance
+  const task = selected.value
+  const stamp = privateFiles.capture()
+  const result = await props.submit(action, { id: task.id, version: task.version, ...body })
+  if (selected.value === task && privateFiles.current(stamp) && result.id && typeof result.version === 'number') selected.value = result as unknown as TaskInstance
   await load().catch(() => undefined)
 }
 async function choose(field: string) {
   if (!selected.value) return
+  const task = selected.value
+  const currentTask = () => selected.value === task
   if (!editable(field)) throw new Error('此字段不在本次补交范围内')
   const path = await chooseImagePath(true)
+  if (!currentTask() || !editable(field)) throw new Error('任务或补交范围已变化，请重新选择图片')
+  const stamp = privateFiles.capture()
   let file
-  try { file = await upload(path, `task_evidence:${selected.value.id}`) }
-  catch (e) { throw new Error(`“${selected.value.template.fields.find(f => f.id === field)?.label || field}”上传失败：${e instanceof Error ? e.message : '请重试'}；其他已上传证据已保留`) }
-  if (!editable(field)) throw new Error('补交范围已变化，请重新查看任务')
+  try { file = await upload(path, `task_evidence:${task.id}`) }
+  catch (e) { throw new Error(`“${task.template.fields.find(f => f.id === field)?.label || field}”上传失败：${e instanceof Error ? e.message : '请重试'}；其他已上传证据已保留`) }
+  if (!currentTask() || !editable(field) || !privateFiles.current(stamp)) throw new Error('任务或补交范围已变化，请重新查看任务')
   const current = draft.value.fields[field]
   draft.value.fields[field] = [...(Array.isArray(current) ? current : []), file.id]
   invalidatePreview()
 }
 async function saveDraft() {
+  for (const field of selected.value?.template.fields || []) { const value = draft.value.fields[field.id]; if (field.kind === 'text' && typeof value === 'string' && [...value].length > (field.max_length || 0)) throw new Error(`“${field.label}”超过最大字数`) }
   const time = occurred.value ? Math.floor(new Date(occurred.value).getTime() / 1000) : undefined
   if (occurred.value && !Number.isSafeInteger(time)) throw new Error('请填写可识别的成果发生时间，如 2026-10-28T12:30:00+08:00')
   await act('evidence_save', { evidence: { fields: draft.value.fields, ...(time !== undefined ? { occurred_at: time } : {}) } })
@@ -67,7 +74,7 @@ async function preview() {
   }
   await saveDraft(); await act('evidence_preview'); confirmed.value = false }
 function invalidatePreview() { confirmed.value = false; if (selected.value) selected.value.preview = undefined }
-function editable(id: string) { return selected.value?.status !== 'supplement' || !!selected.value.supplement_fields?.includes(id) }
+function editable(id: string) { const task = selected.value; return !!task && (task.status === 'in_progress' || (task.status === 'supplement' && !!task.supplement_fields?.includes(id))) }
 function removeImage(field: string, id: string) { if (!editable(field)) return; draft.value.fields[field] = (draft.value.fields[field] as string[]).filter(item => item !== id); invalidatePreview() }
 function setField(id: string, event: unknown) { if (!editable(id)) return; draft.value.fields[id] = (event as { detail: { value: string } }).detail.value; invalidatePreview() }
 async function showImage(id: string) { privateFiles.clear(); const path = await privateFiles.download(fileUrl(id, '本人核对任务证据')); if (path) previewImages.value = [path] }

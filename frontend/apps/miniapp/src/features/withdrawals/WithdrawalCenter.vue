@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { usePrivateFiles } from '../files/private-files'
-import { onCommandRecovered } from '../platform/recovery'
+import { onCommandRecovered, type RecoveryTarget } from '../platform/recovery'
 import { onUnmounted, ref, watch } from 'vue'
 import { BusinessError } from '../platform/api'
 import { withdrawals, withdrawalStatusNames, withdrawalStatusLabel, type WithdrawalApplication, type WithdrawalPreview, type WithdrawalReveal, type WithdrawalRule } from './api'
 import { commissions, type CommissionSource, type CommissionSummary, type CommissionEntry } from '../commissions/api'
 import type { User } from '../identity/api'
 import { fileUrl } from '../files/api'
-const props = defineProps<{ me: User; revision: number; busy: boolean; blocked: boolean; submit: (action: string, body: Record<string, unknown>) => Promise<Record<string, unknown>> }>()
+const props = defineProps<{ me: User; revision: number; busy: boolean; blocked: boolean; submit: (action: string, body: Record<string, unknown>, target?: RecoveryTarget) => Promise<Record<string, unknown>> }>()
 const summary = ref<CommissionSummary>()
 const entries = ref<CommissionEntry[]>([])
 const cursor = ref<number | null>(null)
@@ -28,7 +28,10 @@ const reveal = ref<WithdrawalReveal>()
 const originalAccount = ref('')
 const originalImage = ref('')
 const privateFiles = usePrivateFiles(() => { image.value = ''; originalImage.value = ''; originalAccount.value = ''; reveal.value = undefined; confirmed.value = false })
-const stopRecovery = onCommandRecovered(({ action, result }) => {
+const stopRecovery = onCommandRecovered(async ({ action, result, target }) => {
+  const stamp = privateFiles.capture()
+  if (!privateFiles.current(stamp)) return
+  if (action === 'receipt_reveal' && target === 'withdrawal-original') await displayOriginal(result, stamp)
   if (action === 'withdrawal_preview') { const restored = result as unknown as WithdrawalPreview; amount.value = format(restored.amount_cents); receiptId.value = restored.receipt_id; preview.value = restored; confirmed.value = false }
   if (action === 'withdrawal_apply') { preview.value = undefined; amount.value = ''; confirmed.value = false }
   if (action === 'withdrawal_receipt_reveal' && privateFiles.current(privateFiles.capture())) reveal.value = result as unknown as WithdrawalReveal
@@ -48,7 +51,8 @@ async function apply() { if (!preview.value || !confirmed.value) throw new Error
 async function cancel(app: WithdrawalApplication) { if (!reason.value.trim()) throw new Error('请填写撤销原因'); await props.submit('withdrawal_cancel', { id: app.id, version: app.version, reason: reason.value }); await load().catch(() => undefined) }
 async function show(app: WithdrawalApplication) { if (!reason.value.trim()) throw new Error('请填写查看资料用途'); const stamp = privateFiles.capture(); const result = await props.submit('withdrawal_receipt_reveal', { id: app.id, reason: reason.value }); if (privateFiles.current(stamp)) reveal.value = result as unknown as WithdrawalReveal }
 async function showImage(id: string) { const path = await privateFiles.download(fileUrl(id, reason.value)); if (path) { image.value = path; uni.previewImage({ urls: [path] }) } }
-async function showOriginal() { const stamp = privateFiles.capture(); const result = await props.submit('receipt_reveal', { id: receiptId.value, reason: '提交提现前本人核对收款资料' }); if (!privateFiles.current(stamp)) return; originalAccount.value = String(result.account || ''); if (typeof result.file_id === 'string') { const path = await privateFiles.download(fileUrl(result.file_id), stamp); if (path) originalImage.value = path } }
+async function showOriginal() { const stamp = privateFiles.capture(); const result = await props.submit('receipt_reveal', { id: receiptId.value, reason: '提交提现前本人核对收款资料' }, 'withdrawal-original'); await displayOriginal(result, stamp) }
+async function displayOriginal(result: Record<string, unknown>, stamp: number) { if (!privateFiles.current(stamp)) return; originalAccount.value = String(result.account || ''); if (typeof result.file_id === 'string') { const path = await privateFiles.download(fileUrl(result.file_id), stamp); if (path) originalImage.value = path } }
 async function complaint(appId?: string) { if (!reason.value.trim()) throw new Error('请填写异议说明'); await props.submit('correction', { reason: reason.value, application_id: appId || recordId.value, record_id: recordId.value }); message.value = '已提交核查；系统数字纠错与线下付款核实分别处理' }
 </script>
 <template>

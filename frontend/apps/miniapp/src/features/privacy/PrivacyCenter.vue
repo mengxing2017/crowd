@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
+import { onSessionExpired } from '../session/api'
 import { usePrivateScope } from '../../shared/use-private-scope'
 import { privacy, type OperationRecord } from './api'
 const props = defineProps<{ revision: number; busy: boolean; blocked: boolean; submit: (action: string, body: Record<string, unknown>) => Promise<Record<string, unknown>>; run: (work: () => Promise<void>) => Promise<void> }>()
 const policy = ref<OperationRecord | null>(null), requests = ref<OperationRecord[]>([]), content = ref(''), reason = ref(''), error = ref(''), loaded = ref(false)
 async function load() { error.value = ''; try { const [p, r] = await Promise.all([privacy.privacyPolicy(), privacy.privacyRequests()]); policy.value = p; requests.value = r; loaded.value = true } catch (e) { error.value = e instanceof Error ? e.message : '查询失败'; throw e } }
 const scope = usePrivateScope(() => { content.value = '' })
+onUnmounted(onSessionExpired(scope.clear))
 function clear() { scope.clear() }
 async function viewCopy(id: string) { const stamp = scope.capture(); const result = await privacy.privacyCopy(id); if (scope.current(stamp)) content.value = JSON.stringify(result.content, null, 2) }
 watch(() => props.revision, () => { void props.run(load) }, { immediate: true })
