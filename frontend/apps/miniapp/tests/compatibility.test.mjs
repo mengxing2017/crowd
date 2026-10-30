@@ -215,3 +215,120 @@ test('image picking prefers chooseMedia and preserves an older-library fallback 
   const cancel = harness({}, { canIUse: () => true, chooseMedia: options => options.fail({ errMsg: 'chooseMedia:fail cancel' }) })
   await assert.rejects(cancel.load('features/files/api/index.ts').chooseImagePath(), /已取消选择/)
 })
+
+test('receipt recovery restores the withdrawal panel, without exposing it in the page receipt panel', async () => {
+  const pagePath = resolve(root, 'pages/index/index.vue'), withdrawalPath = resolve(root, 'features/withdrawals/WithdrawalCenter.vue')
+  const h = harness({ expose: { [pagePath]: ['pending', 'me', 'recoverCommand', 'fullAccount'], [withdrawalPath]: ['originalAccount'] }, props: { me: { id: 'alice', receipts: [] } },
+    [resolve(root, 'features/identity/api/index.ts')]: { identity: { me: async () => { throw new Error('refresh unavailable') } } },
+    [resolve(root, 'features/platform/api/index.ts')]: { BusinessError: class extends Error {}, platform: { commandResult: async () => ({ account: 'original-account' }) } },
+  }, { request: () => undefined })
+  const page = h.load('pages/index/index.vue'), withdrawal = h.load('features/withdrawals/WithdrawalCenter.vue')
+  const recovery = h.load('features/platform/recovery.ts')
+  recovery.rememberCommand({ action: 'receipt_reveal', owner: 'alice', key: 'original-key', target: 'withdrawal-original', body: { account: 'not-persisted' } })
+  page.me.value = { id: 'alice' }; page.pending.value = recovery.restoreCommand('alice')
+  await page.recoverCommand()
+  assert.equal(withdrawal.originalAccount.value, 'original-account'); assert.equal(page.fullAccount.value, ''); assert.equal(page.pending.value, null)
+  assert.equal(JSON.stringify([...h.storage.values()]).includes('not-persisted'), false)
+})
+
+test('failed result delivery retains the recovery key until the original use case accepts it', async () => {
+  const { page, load } = pageHarness({ command: async () => { throw new Error('lost response') } })
+  page.me.value = { id: 'alice' }; await assert.rejects(page.submit('withdrawal_preview', {}))
+  const key = page.pending.value.key
+  const stop = load('features/platform/recovery.ts').onCommandRecovered(async () => { throw new Error('preview download failed') })
+  await assert.rejects(page.recoverCommand(), /preview download failed/)
+  assert.equal(page.pending.value.key, key)
+  stop(); await page.recoverCommand(); assert.equal(page.pending.value, null)
+})
+
+test('changing tasks while the native picker is open prevents upload to the new task', async () => {
+  const path = resolve(root, 'features/tasks/TaskCenter.vue'), picker = deferred(); let uploads = 0
+  const h = harness({ expose: { [path]: ['selected', 'choose', 'draft'] }, props: { run: async () => undefined },
+    [resolve(root, 'features/files/api/index.ts')]: { chooseImagePath: () => picker.promise, upload: async () => { uploads++; return { id: 'image' } } },
+  })
+  const view = h.load('features/tasks/TaskCenter.vue')
+  view.selected.value = { id: 'first', version: 1, status: 'in_progress' }
+  const work = view.choose('image')
+  view.selected.value = { id: 'second', version: 1, status: 'in_progress' }; picker.resolve('picked-image')
+  await assert.rejects(work, /任务或补交范围已变化/); assert.equal(uploads, 0)
+})
+
+test('upload completion after switching tasks never mutates the new evidence draft', async () => {
+  const path = resolve(root, 'features/tasks/TaskCenter.vue'), uploaded = deferred(), started = deferred()
+  const h = harness({ expose: { [path]: ['selected', 'choose', 'draft'] }, props: { run: async () => undefined },
+    [resolve(root, 'features/files/api/index.ts')]: { chooseImagePath: async () => 'picked-image', upload: () => { started.resolve(); return uploaded.promise } },
+  })
+  const view = h.load('features/tasks/TaskCenter.vue')
+  view.selected.value = { id: 'task', version: 1, status: 'supplement', supplement_fields: ['image'], template: { fields: [] } }
+  const work = view.choose('image'); await started.promise
+  // Even reopening the same task/version represents a different editing context.
+  view.selected.value = { id: 'task', version: 1, status: 'supplement', supplement_fields: ['image'] }
+  view.draft.value = { fields: { image: ['new-context-image'] } }; uploaded.resolve({ id: 'late-image' })
+  await assert.rejects(work, /任务或补交范围已变化/)
+  assert.equal(view.draft.value.fields.image.length, 1); assert.equal(view.draft.value.fields.image[0], 'new-context-image')
+})
+
+test('session expiry cleans private downloads before component unmount and rejects late paths', async () => {
+  const pending = deferred(); let calls = 0; const removed = []
+  const h = harness({ [resolve(root, 'features/files/api/index.ts')]: { download: () => ++calls === 1 ? Promise.resolve('displayed') : pending.promise, removeTempFile: path => removed.push(path) } })
+  const session = h.load('features/session/api/index.ts'); session.setToken('logged-in')
+  const view = h.load('features/files/private-files.ts').usePrivateFiles(() => undefined)
+  await view.download('file'); const late = view.download('other-file')
+  session.setToken(''); assert.ok(removed.includes('displayed'))
+  pending.resolve('late'); assert.equal(await late, undefined); assert.ok(removed.includes('late'))
+})
+
+test('mark-read command stays successful when the follow-up notification refresh fails', async () => {
+  const path = resolve(root, 'features/notifications/NotificationCenter.vue'); let commands = 0
+  const h = harness({ expose: { [path]: ['mark', 'loadError'] }, props: { run: async () => undefined, submit: async () => { commands++; return {} } },
+    [resolve(root, 'features/notifications/api/index.ts')]: { notifications: { messages: async () => { throw new Error('offline refresh') } } },
+  })
+  const view = h.load('features/notifications/NotificationCenter.vue')
+  await view.mark({ id: 'message', version: 1 }); assert.equal(commands, 1); assert.equal(view.loadError.value, 'offline refresh')
+})
+
+test('late task details and command results cannot reopen a closed detail panel', async () => {
+  const path = resolve(root, 'features/tasks/TaskCenter.vue'), detail = deferred(), command = deferred()
+  const h = harness({ expose: { [path]: ['open', 'act', 'selected', 'privateFiles'] }, props: { run: async () => undefined, submit: () => command.promise },
+    [resolve(root, 'features/tasks/api/index.ts')]: { taskStatusNames: {}, tasks: { detail: () => detail.promise, mine: async () => ({ items: [] }) } },
+  })
+  const view = h.load('features/tasks/TaskCenter.vue')
+  const opening = view.open({ id: 'task' }); view.privateFiles.clear()
+  detail.resolve({ id: 'task', version: 1 }); await opening; assert.equal(view.selected.value, undefined)
+  view.selected.value = { id: 'task', version: 1 }
+  const acting = view.act('task_start'); view.selected.value = undefined; view.privateFiles.clear()
+  command.resolve({ id: 'task', version: 2 }); await acting; assert.equal(view.selected.value, undefined)
+})
+
+test('hiding while delivering a recovered result preserves its key without restoring a ticket', async () => {
+  const { page, load, hooks } = pageHarness({ command: async () => { throw new Error('response lost') } })
+  page.me.value = { id: 'alice' }; await assert.rejects(page.submit('web_ticket', {}))
+  const delivered = deferred()
+  load('features/platform/recovery.ts').onCommandRecovered(() => delivered.promise)
+  const work = page.recoverCommand(); await tick(); hooks.hide.forEach(f => f()); delivered.resolve()
+  await assert.rejects(work, /页面已隐藏/); assert.ok(page.pending.value)
+})
+
+test('saving a draft rejects overlong Unicode text without requiring incomplete fields', async () => {
+  const path = resolve(root, 'features/tasks/TaskCenter.vue'); let commands = 0
+  const h = harness({ expose: { [path]: ['saveDraft', 'selected', 'draft'] }, props: { run: async () => undefined, submit: async () => { commands++; return {} } },
+    [resolve(root, 'features/tasks/api/index.ts')]: { taskStatusNames: {}, tasks: { mine: async () => ({ items: [] }), detail: async () => ({ id: 'task' }) } },
+  })
+  const view = h.load('features/tasks/TaskCenter.vue')
+  const task = { id: 'task', version: 1, template: { fields: [{ id: 'text', kind: 'text', label: '说明', max_length: 2 }, { id: 'unfinished', kind: 'text', required: true, max_length: 10 }] } }
+  view.selected.value = task; view.draft.value = { fields: { text: '😀😀😀' } }
+  await assert.rejects(view.saveDraft(), /超过最大字数/); assert.equal(commands, 0)
+  view.draft.value.fields.text = '😀😀'; await view.saveDraft(); assert.equal(commands, 1)
+})
+
+test('session invalidation clears a visible privacy copy immediately and rejects an older pending copy', async () => {
+  const path = resolve(root, 'features/privacy/PrivacyCenter.vue'), late = deferred(); let calls = 0
+  const h = harness({ expose: { [path]: ['viewCopy', 'content'] }, props: { run: async () => undefined },
+    [resolve(root, 'features/privacy/api/index.ts')]: { privacy: { privacyCopy: async () => ++calls === 1 ? { content: { private: 'visible' } } : late.promise } },
+  })
+  const session = h.load('features/session/api/index.ts'); session.setToken('old')
+  const view = h.load('features/privacy/PrivacyCenter.vue')
+  await view.viewCopy('first'); assert.match(view.content.value, /visible/)
+  const work = view.viewCopy('second'); session.setToken(''); assert.equal(view.content.value, '')
+  session.setToken('new'); late.resolve({ content: { private: 'late' } }); await work; assert.equal(view.content.value, '')
+})
